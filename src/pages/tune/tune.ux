@@ -126,8 +126,9 @@ export default {
     const self = this
     bridge.runCmd('ps', function (err, res) {
       const text = (!err && res && res.status === 'ok') ? String(res.stdout || '') : ''
-      const n = text ? Math.max(0, text.split('\n').filter(function (l) { return l.trim() }).length - 1) : 0
-      self.procLine = n ? ('进程 ' + n + ' 个（含内核任务）') : '进程列表读不到'
+      // NuttX 的 ps 是"一条任务多行"，只数任务头行（PID GROUP PRI POLICY TYPE …）才是任务数
+      const n = text ? text.split('\n').filter(function (l) { return /^\s*\d+\s+\d+\s+\d+\s+\S+\s+\S+/.test(l) }).length : 0
+      self.procLine = n ? ('任务 ' + n + ' 个（含内核任务）') : '进程列表读不到'
       bridge.runCmd('df', function (err2, res2) {
         const t2 = (!err2 && res2 && res2.status === 'ok') ? String(res2.stdout || '').trim() : ''
         self.diskLine = t2 ? t2.split('\n').slice(0, 4).join('\n') : '磁盘占用读不到'
