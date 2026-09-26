@@ -24,3 +24,9 @@ attic/backend-port-搁置/
 docs/*.png
 tools/preview/prew-upstream.png
 backend/_variant.lua
+
+# ---------- 从米环管理 3.0 提取的参考 Lua（第三方未开源，只作本地参考，不入库）----------
+backend/ref-mihuan3-full.lua
+backend/ref-mihuan3-parts/
+backend/ref-mihuan3.lua
+backend/ref-mihuan3/
