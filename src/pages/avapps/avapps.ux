@@ -66,7 +66,11 @@ export default {
     this.state = '读取中…'
     bridge.appList(function (err, res) {
       if (err) { self.state = '✗ ' + err; return }
-      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '读不到'); return }
+      if (!res || res.status !== 'ok') {
+        self.state = '✗ ' + ((res && res.message) || '读不到应用列表')
+        if (res && res.seen && res.seen.length) self.state = self.state + '｜目录：' + res.seen.slice(0, 6).join(' ')
+        return
+      }
       const out = []
       const src = res.items || []
       for (let i = 0; i < src.length && i < 60; i++) {

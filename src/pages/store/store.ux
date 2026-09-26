@@ -76,7 +76,14 @@ export default {
     this.cur = null; this.shareText = ''
     bridge.appList(function (err, res) {
       if (err) { self.state = '✗ ' + err; return }
-      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '后端起不来'); return }
+      if (!res || res.status !== 'ok') {
+        self.state = '✗ ' + ((res && res.message) || '后端起不来')
+        // 后端找不到 apps.json 时会把试过的路径与 /data 下的目录一并返回——照抄给用户，便于定位
+        if (res && res.seen && res.seen.length) {
+          self.shareText = '后端在 /data 下看到的目录：\n' + res.seen.slice(0, 40).join('\n')
+        }
+        return
+      }
       const items = (res.items || []).map(function (it) {
         return {
           package: it.package || it.pkg || it.name || '?',

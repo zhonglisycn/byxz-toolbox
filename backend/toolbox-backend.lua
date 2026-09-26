@@ -610,24 +610,70 @@ end
 local function doAppManager(req)
     local action = req.action or 'apps'
     if action == 'apps' then
-        local roots = { '/data/quickapp/apps.json', '/data/apps.json', '/data/files/quickapp/apps.json' }
-        for i = 1, #roots do
-            local data = readJson(roots[i])
-            if type(data) == 'table' then
-                local list = {}
-                for k, v in pairs(data) do
-                    if type(v) == 'table' then
-                        list[#list + 1] = { pkg = tostring(v.package or v.pkg or k),
-                                            name = tostring(v.name or ''), visible = v.visible ~= false }
-                    elseif type(v) == 'string' then
-                        list[#list + 1] = { pkg = k, name = v, visible = true }
-                    end
+        -- 真实 apps.json 是 {InstalledApps = {...}, HiddenApps = {...}}；也兼容"包名 -> 应用"的扁平写法。
+        -- 路径按候选表找；都不行就扫一遍 /data 的下一层，并把目录摊开返回，便于定位真实位置。
+        local cands = { '/data/quickapp/apps.json', '/data/apps.json', '/data/files/quickapp/apps.json',
+                        '/data/quickapp/files/apps.json', '/data/data/quickapp/apps.json' }
+        local tried = {}
+        local function listOf(data)
+            local items = {}
+            if type(data) ~= 'table' then return nil end
+            local function addOne(v, forced)
+                if type(v) ~= 'table' then return end
+                local pkg = v.package or v.pkg or v.name
+                if pkg == nil then return end
+                items[#items + 1] = { pkg = tostring(pkg), name = tostring(v.name or ''),
+                                      visible = (forced ~= nil) and forced or (v.visible ~= false) }
+            end
+            if type(data.InstalledApps) == 'table' then
+                for i = 1, #data.InstalledApps do addOne(data.InstalledApps[i], true) end
+                if type(data.HiddenApps) == 'table' then
+                    for i = 1, #data.HiddenApps do addOne(data.HiddenApps[i], false) end
                 end
-                note('应用列表 ' .. #list)
-                return { status = 'ok', source = roots[i], items = list, count = #list }
+                return items
+            end
+            for k, v in pairs(data) do
+                if type(v) == 'table' then addOne(v) else items[#items + 1] = { pkg = tostring(k), name = tostring(v), visible = true } end
+            end
+            return items
+        end
+        -- 先按候选表
+        for i = 1, #cands do
+            tried[#tried + 1] = cands[i]
+            local data = readJson(cands[i])
+            local items = listOf(data)
+            if items and #items > 0 then
+                note('应用列表 ' .. #items)
+                return { status = 'ok', source = cands[i], items = items, count = #items }
             end
         end
-        return { status = 'error', message = '读不到应用列表（apps.json 不在预期位置）' }
+        -- 再扫 /data 下一层（有界：只列一层目录 + 试几个固定组合）
+        local seen = {}
+        local dirs = { '/data', '/data/quickapp', '/data/files' }
+        for d = 1, #dirs do
+            local names = runShell('ls -1 "' .. dirs[d] .. '"')
+            if names and names ~= '' then
+                local nm = splitLines(names)
+                for j = 1, #nm do
+                    seen[#seen + 1] = dirs[d] .. '/' .. nm[j]
+                    local w1 = dirs[d] .. '/' .. nm[j] .. '/apps.json'
+                    local items1 = listOf(readJson(w1))
+                    if items1 and #items1 > 0 then
+                        note('应用列表 ' .. #items1 .. '（扫描找到）')
+                        return { status = 'ok', source = w1, items = items1, count = #items1 }
+                    end
+                    local w2 = dirs[d] .. '/' .. nm[j] .. '/quickapp/apps.json'
+                    local items2 = listOf(readJson(w2))
+                    if items2 and #items2 > 0 then
+                        note('应用列表 ' .. #items2 .. '（扫描找到）')
+                        return { status = 'ok', source = w2, items = items2, count = #items2 }
+                    end
+                end
+            end
+        end
+        return { status = 'error', needPath = true,
+                 message = '找不到 apps.json。已试：' .. table.concat(tried, ' , '),
+                 seen = seen }
     end
     if action == 'app_size' then
         if req.package == nil or req.package == '' then return { status = 'error', message = '缺少 package' } end
