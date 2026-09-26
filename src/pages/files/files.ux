@@ -1,3 +1,5 @@
+<import name="input-method" src="../../components/InputMethod/InputMethod.ux"></import>
+
 <template>
   <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
     <scroll class="scroll" scroll-y="true" bounces="true">
@@ -22,8 +24,35 @@
       <div class="card" if="{{text}}">
         <text class="out" style="font-size: 12px">{{text}}</text>
       </div>
+
+      <!-- 编辑：改小配置文件用（覆盖写；后端要 confirm，这里做成按两次） -->
+      <div class="padwrap" if="{{viewPath}}">
+        <div class="inputbar" @click="toggleKb">
+          <text class="ib-text" style="font-size: 13px">{{draft ? draft : '点这里输入新内容'}}</text>
+          <text class="ib-hint" style="font-size: 11px">{{kbOn ? '收起' : '输入'}}</text>
+        </div>
+        <text class="sec" style="font-size: 12px">{{editHint}}</text>
+        <div class="pill" style="background-color: {{armed ? '#ff453a' : '#0a84ff'}}" @click="saveFile">
+          <text class="t-pill" style="font-size: 15px">{{armed ? '再点一次确认覆盖写入' : '保存（覆盖 ' + viewPath + '）'}}</text>
+        </div>
+        <div class="pill pill-quiet" @click="cancelEdit">
+          <text class="t-pill" style="font-size: 15px">取消编辑</text>
+        </div>
+      </div>
+
       <div class="gap"></div>
     </scroll>
+
+    <!-- 键盘：按需挂载（作者标注 hide watcher 在部分设备不可靠） -->
+    <input-method if="{{kbOn}}"
+      hide="{{false}}"
+      keyboardtype="QWERTY"
+      maxlength="60"
+      vibratemode="short"
+      screentype="pill-shaped"
+      @delete="onKbDelete"
+      @complete="onKbInput"
+    ></input-method>
   </div>
 </template>
 
@@ -36,7 +65,9 @@ const ROOTS = ['/', '/data', '/tmp', '/data/quickapp', '/proc']
 export default {
   private: {
     padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
-    path: '/', items: [], state: '正在列目录…', text: ''
+    path: '/', items: [], state: '正在列目录…', text: '',
+    // 编辑：viewPath = 当前查看的文件；draft = 正在输入的新内容；armed = 已按过一次保存（二次确认）
+    viewPath: '', draft: '', armed: false, kbOn: false, saving: false, editHint: ''
   },
 
   onShow() {
@@ -72,6 +103,9 @@ export default {
     this.text = ''
     bridge.readText(item.d, function (err, res) {
       if (!err && res && res.status === 'ok' && res.text !== undefined) {
+        self.viewPath = item.d
+        self.draft = ''; self.armed = false; self.kbOn = false
+        self.editHint = '要改这个文件就在下面输入新内容（覆盖写）'
         self.state = '✓ 读了 ' + item.n + '（' + (res.bytes || 0) + ' 字节，显示前 1200）'
         self.text = String(res.text).slice(0, 1200)
         return
@@ -79,6 +113,50 @@ export default {
       // 读不成文本就当目录进去（后端对目录会返回文件内容失败）
       self.list(item.d)
     })
+  },
+
+  /* ---------- 编辑 ---------- */
+  toggleKb() {
+    this.$app.$def.tap()
+    this.kbOn = !this.kbOn
+    this.editHint = this.kbOn ? '敲的是新内容（会覆盖原文件）；输完点下面保存' : '已收起键盘'
+  },
+
+  onKbInput(evt) {
+    const t = evt && evt.detail && evt.detail.content ? String(evt.detail.content) : ''
+    if (!t) return
+    this.draft = (this.draft + t).slice(0, 2000)
+    this.armed = false
+  },
+
+  onKbDelete() {
+    this.draft = this.draft.slice(0, -1)
+    this.armed = false
+  },
+
+  saveFile() {
+    const app = this.$app.$def
+    app.tap()
+    if (!this.viewPath) { this.editHint = '没有选中的文件'; return }
+    if (!this.draft) { this.editHint = '新内容是空的，先输入再保存'; return }
+    if (!this.armed) { this.armed = true; this.editHint = '覆盖写会替换整个文件；确认无误就再点一次'; return }
+    const self = this
+    this.saving = true
+    this.editHint = '写入中…'
+    bridge.writeFile(this.viewPath, this.draft, function (err, res) {
+      self.saving = false
+      self.armed = false
+      if (err) { self.editHint = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.editHint = '✗ ' + ((res && res.message) || '写不进去'); return }
+      self.editHint = '✓ 已写入 ' + self.viewPath
+      self.tap({ d: self.viewPath })          // 重新读一遍看结果
+    })
+  },
+
+  cancelEdit() {
+    this.$app.$def.tap()
+    this.kbOn = false; this.draft = ''; this.armed = false
+    this.editHint = '已取消编辑'
   },
 
   up() {
@@ -103,4 +181,8 @@ export default {
   .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
   .out { color: #d6d6d6; width: 100%; }
   .gap { width: 100%; height: 14px; }
+  .padwrap { width: 100%; flex-direction: column; flex-shrink: 0; }
+  .inputbar { width: 100%; height: 40px; flex-direction: row; align-items: center; padding-left: 12px; padding-right: 12px; margin-bottom: 6px; flex-shrink: 0; background-color: #1c1c1e; border-radius: 14px; }
+  .ib-text { color: #ffffff; flex: 1; }
+  .ib-hint { color: #8e8e93; }
 </style>

@@ -217,6 +217,11 @@ export function listDir(path, cb) { call('file', { action: 'list', path: path },
 export function readText(path, cb) { call('file', { action: 'text', path: path }, cb) }
 export function fileInfo(path, cb) { call('file', { action: 'info', path: path }, cb) }
 
+/** 写文件（覆盖）。后端要求显式 confirm，这里固定带上——调用方负责在界面上做二次确认 */
+export function writeFile(path, content, cb) {
+  call('file', { action: 'write', path: path, text: String(content || ''), confirm: true }, cb)
+}
+
 /** 监控：开始 / 停止 / 状态（悬浮层那两项先不做，免得挡界面） */
 export function cpuMonitor(action, cb) { call('cpu_monitor', { action: action || 'status' }, cb) }
 export function memoryMonitor(action, cb) { call('memory_monitor', { action: action || 'status' }, cb) }
@@ -230,5 +235,5 @@ export function appList(cb) { call('app_manager', { action: 'apps' }, cb) }
 
 export default {
   setPkg, pkg, dir, hasGuard, findDir, announce, refreshGuard, call, status, readBackendStatus,
-  runCmd, listDir, readText, fileInfo, cpuMonitor, memoryMonitor, cacheStatus, cacheClear, appList
+  runCmd, listDir, readText, fileInfo, writeFile, cpuMonitor, memoryMonitor, cacheStatus, cacheClear, appList
 }

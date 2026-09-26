@@ -31,6 +31,13 @@
       </div>
 
       <text class="sec" style="font-size: 12px">{{state}}</text>
+
+      <div class="card" if="{{benchHist.length}}">
+        <text class="head" style="font-size: 12px">历次跑分（越高越快，最新在右）</text>
+        <div class="chart">
+          <div class="col" for="{{benchHist}}" tid="b" style="height: {{$item.hp}}px"></div>
+        </div>
+      </div>
       <div class="card" if="{{out}}">
         <text class="out" style="font-size: 12px">{{out}}</text>
       </div>
@@ -42,17 +49,21 @@
 <script>
 import router from '@system.router'
 import bridge from '../../common/core/bridge'
+import { saveKey, loadKey } from '../../common/core/util'
 
 export default {
   private: {
     padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
-    state: '点上面三项试试', out: ''
+    state: '点上面三项试试', out: '',
+    benchHist: []
   },
 
   onShow() {
     const app = this.$app.$def
     this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
     this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    const self = this
+    loadKey('tb_bench', function (ok, v) { self.benchHist = ok && v ? JSON.parse(v) : [] })
   },
 
   proc() {
@@ -83,6 +94,13 @@ export default {
       if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '跑不了'); return }
       self.state = '✓ ' + res.rounds + ' 次 / ' + (res.seconds || 0) + ' 秒'
       self.out = '速度 ' + res.kops + ' 千次每秒\n结果校验 ' + res.checksum
+      // 存历史并算柱高（越高越快）
+      const h = self.benchHist.concat([{ k: res.kops }]).slice(-18)
+      const max = h.reduce(function (a, b) { return Math.max(a, Number(b.k) || 0) }, 1)
+      self.benchHist = h.map(function (it) {
+        return { k: it.k, hp: Math.max(4, Math.round((Number(it.k) || 0) * 56 / max)) }
+      })
+      saveKey('tb_bench', JSON.stringify(self.benchHist), null)
     })
   },
 
@@ -108,5 +126,8 @@ export default {
   @import '../../common/style/base.css';
   .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
   .out { color: #d6d6d6; width: 100%; }
+  .head { color: #8e8e93; width: 100%; margin-bottom: 6px; }
+  .chart { width: 100%; height: 60px; flex-direction: row; align-items: flex-end; }
+  .col { width: 8px; margin-right: 3px; background-color: #0d84ff; border-radius: 2px; flex-shrink: 0; }
   .gap { width: 100%; height: 14px; }
 </style>

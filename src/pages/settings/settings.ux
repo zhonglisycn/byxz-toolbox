@@ -38,6 +38,14 @@
       <div class="pill pill-quiet" @click="reset">
         <text class="t-pill" style="font-size: 16px">恢复默认设置</text>
       </div>
+      <text class="sec" style="font-size: 12px">导出（便于备份，或发帖时贴出来）</text>
+      <div class="pill" @click="exportCfg">
+        <text class="t-pill" style="font-size: 16px">导出配置与用法（文本）</text>
+      </div>
+      <div class="card" if="{{cfgText}}">
+        <text class="out" style="font-size: 12px">{{cfgText}}</text>
+      </div>
+
       <div class="gap"></div>
     </scroll>
   </div>
@@ -45,7 +53,7 @@
 
 <script>
 import router from '@system.router'
-import { dropKey } from '../../common/core/util'
+import { dropKey, loadKey } from '../../common/core/util'
 
 export default {
   private: {
@@ -58,10 +66,36 @@ export default {
     padIdx: 1,
     padHint: '',
     padDetail: '',
-    padTotal: 3
+    padTotal: 3,
+    cfgText: ''
   },
 
   onShow() { this.sync() },
+
+  // EXPORT_HERE
+  /** 把设置与脚本/历史导成一段纯文本（手表上只能看，便于抄下来或拍照） */
+  exportCfg() {
+    const app = this.$app.$def
+    app.tap()
+    const self = this
+    const lines = ['工具箱 · 配置与用法',
+      '屏幕 ' + app.w + 'x' + app.h + ' · 形状 ' + app.shape,
+      '留白 ' + this.padName + '（档 ' + this.padIdx + '/' + this.padTotal + '）',
+      '按键振动 ' + (this.vib ? '开' : '关')]
+    loadKey('tb_scripts', function (ok, v) {
+      const sc = ok && v ? JSON.parse(v) : []
+      lines.push('脚本 ' + sc.length + ' 条')
+      for (let i = 0; i < sc.length; i++) lines.push('  $ ' + sc[i])
+      loadKey('tb_hist', function (ok2, v2) {
+        const h = ok2 && v2 ? JSON.parse(v2) : []
+        lines.push('历史 ' + h.length + ' 条（最近 6 条）')
+        for (let i = 0; i < h.length && i < 6; i++) lines.push('  $ ' + h[i])
+        lines.push('后端：表盘位 Lua 应用，装后与界面端互通')
+        lines.push('致谢：Shell++ 作者 IKUN_CXKPRO（米坛）')
+        self.cfgText = lines.join('\n')
+      })
+    })
+  },
 
   sync() {
     const app = this.$app.$def
@@ -111,4 +145,6 @@ export default {
 <style>
   @import '../../common/style/base.css';
   .gap { width: 100%; height: 14px; }
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .out { color: #d6d6d6; width: 100%; }
 </style>

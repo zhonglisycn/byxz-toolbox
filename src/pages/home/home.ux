@@ -41,8 +41,29 @@
         </div>
         <text class="row-go t-icon">›</text>
       </div>
+      <div class="row" @click="go('store')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">存储分析</text>
+          <text class="row-sub" style="font-size: 12px">各应用占用排行，点开看详情</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('sysinfo')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">本机信息</text>
+          <text class="row-sub" style="font-size: 12px">内核 / 内存池 / 分区 / 挂载 一页看全</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
 
       <text class="sec" style="font-size: 12px">动系统</text>
+      <div class="row" @click="go('tune')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">系统管家</text>
+          <text class="row-sub" style="font-size: 12px">内存 / CPU / 进程 体检 + 处理建议</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
       <div class="row" @click="go('avapps')">
         <div class="row-main">
           <text class="row-title" style="font-size: 16px">应用管理</text>

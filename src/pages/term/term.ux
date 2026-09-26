@@ -25,6 +25,29 @@
         <text class="out" style="font-size: 12px">{{out}}</text>
       </div>
 
+      <text class="sec" style="font-size: 12px">脚本（点一下就跑 · ✕ 删除）</text>
+      <div class="chips" if="{{scripts.length}}">
+        <div class="chip" for="{{scripts}}" tid="s">
+          <text class="chip-t" style="font-size: 13px" @click="runScript($item)">{{$item}}</text>
+          <text class="chip-x" style="font-size: 13px" @click="delScript($idx)">✕</text>
+        </div>
+      </div>
+      <text class="sec" style="font-size: 12px" if="{{!scripts.length}}">还没有脚本：先输一条命令，再点下面「存为脚本」</text>
+      <div class="pill pill-quiet" @click="saveScript">
+        <text class="t-pill" style="font-size: 15px">把当前命令存为脚本</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">历史（最近 12 条，点一下填回）</text>
+      <div class="chips" if="{{hist.length}}">
+        <div class="chip" for="{{hist}}" tid="h">
+          <text class="chip-t" style="font-size: 13px" @click="useHist($item)">{{$item}}</text>
+        </div>
+      </div>
+      <text class="sec" style="font-size: 12px" if="{{!hist.length}}">还没有历史</text>
+      <div class="pill pill-quiet" if="{{hist.length}}" @click="clearHist">
+        <text class="t-pill" style="font-size: 15px">清空历史</text>
+      </div>
+
       <text class="sec" style="font-size: 12px">常用命令（点一下就跑）</text>
       <div class="row" for="{{cmds}}" tid="c" @click="run($item.c)">
         <div class="row-main">
@@ -57,11 +80,14 @@
 <script>
 import router from '@system.router'
 import bridge from '../../common/core/bridge'
+import { saveKey, loadKey } from '../../common/core/util'
 
 export default {
   private: {
     padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
     kbOn: false,
+    hist: [],
+    scripts: [],
     keyCount: 0,
     visCount: 0,
     cmd: '',
@@ -81,6 +107,9 @@ export default {
 
   onShow() {
     const app = this.$app.$def
+    const self = this
+    loadKey('tb_hist', function (ok, v) { self.hist = ok && v ? JSON.parse(v) : [] })
+    loadKey('tb_scripts', function (ok, v) { self.scripts = ok && v ? JSON.parse(v) : [] })
     this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
     this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
   },
@@ -109,6 +138,53 @@ export default {
     this.hint = this.cmd ? '已输入：' + this.cmd : '键盘只有英文；输完点右上角「执行」'
   },
 
+  /* ---------- 历史 ---------- */
+  pushHist(cmd) {
+    const list = this.hist.filter(function (c) { return c !== cmd })
+    list.unshift(cmd)
+    this.hist = list.slice(0, 12)
+    saveKey('tb_hist', JSON.stringify(this.hist), null)
+  },
+
+  useHist(c) {
+    this.$app.$def.tap()
+    this.cmd = (c || '').slice(0, 60)
+    this.hint = '已填回：' + this.cmd + '　点右上角「执行」'
+  },
+
+  clearHist() {
+    this.$app.$def.tap()
+    this.hist = []
+    saveKey('tb_hist', '[]', null)
+  },
+
+  /* ---------- 脚本 ---------- */
+  saveScript() {
+    this.$app.$def.tap()
+    const c = String(this.cmd || '').trim()
+    if (!c) { this.hint = '先输一条命令，再存为脚本'; return }
+    if (this.scripts.indexOf(c) >= 0) { this.hint = '这条已经在脚本里了'; return }
+    const list = this.scripts.concat([c]).slice(-20)
+    this.scripts = list
+    saveKey('tb_scripts', JSON.stringify(list), null)
+    this.hint = '已存为脚本：' + c
+  },
+
+  runScript(c) {
+    this.$app.$def.tap()
+    this.cmd = String(c || '').slice(0, 60)
+    this.run(this.cmd)
+  },
+
+  delScript(i) {
+    this.$app.$def.tap()
+    const list = this.scripts.slice()
+    list.splice(i, 1)
+    this.scripts = list
+    saveKey('tb_scripts', JSON.stringify(list), null)
+    this.hint = '已删除该脚本'
+  },
+
   toggleKb() {
     this.$app.$def.tap()
     this.kbOn = !this.kbOn
@@ -120,6 +196,7 @@ export default {
     const app = this.$app.$def
     app.tap()
     this.cmd = cmd
+    this.pushHist(cmd)
     this.hint = '正在跑：' + cmd
     this.out = ''
     const self = this
@@ -163,4 +240,9 @@ export default {
   .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
   .out { color: #d6d6d6; width: 100%; }
   .gap { width: 100%; height: 14px; }
+  /* 历史/脚本标签：横排可滚，别挤压 */
+  .chips { width: 100%; flex-direction: row; flex-wrap: wrap; flex-shrink: 0; }
+  .chip { flex-direction: row; align-items: center; background-color: #1c1c1e; border-radius: 12px; padding: 6px 10px; margin: 0 6px 6px 0; }
+  .chip-t { color: #ffffff; }
+  .chip-x { color: #8e8e93; margin-left: 8px; }
 </style>

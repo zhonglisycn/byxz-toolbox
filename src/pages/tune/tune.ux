@@ -1,0 +1,164 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">系统管家</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="reload">复查</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+
+      <!-- 三项指标 -->
+      <div class="card">
+        <text class="head" style="font-size: 13px">内存（NuttX 分池 Umem）</text>
+        <div class="bar-wrap"><div class="bar" style="width: {{memPct}}%; background-color: {{memColor}}"></div></div>
+        <text class="sub" style="font-size: 12px">{{memLine}}</text>
+      </div>
+      <div class="card">
+        <text class="head" style="font-size: 13px">CPU 负载</text>
+        <div class="bar-wrap"><div class="bar" style="width: {{cpuPct}}%; background-color: {{cpuColor}}"></div></div>
+        <text class="sub" style="font-size: 12px">{{cpuLine}}</text>
+      </div>
+      <div class="card">
+        <text class="head" style="font-size: 13px">进程 / 存储</text>
+        <text class="sub" style="font-size: 12px">{{procLine}}</text>
+        <text class="sub" style="font-size: 12px">{{diskLine}}</text>
+      </div>
+
+      <!-- 建议：只提示，不动手杀进程 -->
+      <text class="sec" style="font-size: 12px">建议（只提示，不替你动手）</text>
+      <div class="card" if="{{advice.length}}">
+        <text class="out" for="{{advice}}" tid="a" style="font-size: 13px">· {{$item}}</text>
+      </div>
+      <div class="card" if="{{!advice.length}}">
+        <text class="sub" style="font-size: 12px">状态看起来正常，没有要处理的。</text>
+      </div>
+
+      <!-- 可做的事：都是本应用能安全完成的 -->
+      <div class="pill" @click="clearCache">
+        <text class="t-pill" style="font-size: 15px">清理本应用缓存</text>
+      </div>
+      <div class="pill pill-quiet" @click="go('mon')">
+        <text class="t-pill" style="font-size: 15px">去监控页看趋势</text>
+      </div>
+      <div class="pill pill-quiet" @click="go('tools')">
+        <text class="t-pill" style="font-size: 15px">去看进程列表</text>
+      </div>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+import { saveKey, loadKey } from '../../common/core/util'
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    state: '检查中…',
+    memPct: 0, memColor: '#0d84ff', memLine: '',
+    cpuPct: 0, cpuColor: '#0d84ff', cpuLine: '',
+    procLine: '', diskLine: '', advice: []
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.reload()
+  },
+
+  reload() {
+    this.$app.$def.tap()
+    this.advice = []
+    this.state = '检查中…'
+    this.checkMem()
+  },
+
+  color(p) { return p >= 90 ? '#ff453a' : (p >= 75 ? '#ff9f0a' : '#0d84ff') },
+
+  /** 1) 内存：free 是分池输出，取 Umem 那一行 */
+  checkMem() {
+    const self = this
+    bridge.runCmd('free', function (err, res) {
+      if (err || !res || res.status !== 'ok') { self.state = '✗ 读内存失败'; self.checkCpu(); return }
+      const text = String(res.stdout || '')
+      const line = text.split('\n').filter(function (l) { return l.indexOf('Umem') >= 0 })[0] || ''
+      const nums = (line.match(/\d+/g) || []).map(Number)
+      if (nums.length >= 2 && nums[0] > 0) {
+        const total = nums[0], used = nums[1]
+        const pct = Math.round(used * 100 / total)
+        self.memPct = pct; self.memColor = self.color(pct)
+        self.memLine = '已用 ' + self.$app.$def.fmtBytes(used) + ' / ' + self.$app.$def.fmtBytes(total) + '（' + pct + '%）'
+        if (pct >= 90) self.advice = self.advice.concat(['内存已用 ' + pct + '%，属高位：重启手环可回收内存池'])
+        else if (pct >= 75) self.advice = self.advice.concat(['内存 ' + pct + '%，偏高：可先清掉不用的应用再看'])
+      } else {
+        self.memLine = '没能从 free 的分池输出里认出 Umem 行'
+        self.advice = self.advice.concat(['内存读数没认出来，可在终端页跑 free 看看实际输出'])
+      }
+      self.checkCpu()
+    })
+  },
+
+  /** 2) CPU：NuttX 没有 loadavg，读 /proc/cpuload */
+  checkCpu() {
+    const self = this
+    bridge.runCmd('cat /proc/cpuload', function (err, res) {
+      if (err || !res || res.status !== 'ok') { self.checkProc(); return }
+      const text = String(res.stdout || '').trim()
+      const nums = (text.match(/\d+/g) || []).map(Number)
+      const peak = nums.length ? Math.max.apply(null, nums) : 0
+      const pct = Math.min(100, Math.round(peak))
+      self.cpuPct = pct; self.cpuColor = self.color(pct)
+      self.cpuLine = text || '(空)'
+      if (pct >= 85) self.advice = self.advice.concat(['CPU 负载偏高（' + pct + '%）：若正在跑后台任务，等它结束再操作'])
+      self.checkProc()
+    })
+  },
+
+  /** 3) 进程数与磁盘 */
+  checkProc() {
+    const self = this
+    bridge.runCmd('ps', function (err, res) {
+      const text = (!err && res && res.status === 'ok') ? String(res.stdout || '') : ''
+      const n = text ? Math.max(0, text.split('\n').filter(function (l) { return l.trim() }).length - 1) : 0
+      self.procLine = n ? ('进程 ' + n + ' 个（含内核任务）') : '进程列表读不到'
+      bridge.runCmd('df', function (err2, res2) {
+        const t2 = (!err2 && res2 && res2.status === 'ok') ? String(res2.stdout || '').trim() : ''
+        self.diskLine = t2 ? t2.split('\n').slice(0, 4).join('\n') : '磁盘占用读不到'
+        self.state = '检查完成'
+      })
+    })
+  },
+
+  clearCache() {
+    this.$app.$def.tap()
+    const self = this
+    bridge.cacheClear(function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '清不了'); return }
+      self.state = '✓ 已清理本应用缓存'
+      self.reload()
+    })
+  },
+
+  go(p) { this.$app.$def.tap(); router.push({ uri: 'pages/' + p + '/' + p }) },
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .head { color: #8e8e93; width: 100%; margin-bottom: 6px; }
+  .sub { color: #a8a8a8; width: 100%; margin-top: 4px; }
+  .out { color: #d6d6d6; width: 100%; }
+  .bar-wrap { width: 100%; height: 8px; background-color: #1c1c1e; border-radius: 4px; }
+  .bar { height: 8px; border-radius: 4px; }
+  .gap { width: 100%; height: 14px; }
+</style>

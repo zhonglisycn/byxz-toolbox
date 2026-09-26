@@ -1,0 +1,98 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">本机信息</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="reload">刷新</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+
+      <div class="card" for="{{cards}}" tid="c">
+        <text class="head" style="font-size: 13px">{{$item.title}}</text>
+        <text class="out" style="font-size: 12px">{{$item.body}}</text>
+      </div>
+
+      <div class="pill" @click="copyAll">
+        <text class="t-pill" style="font-size: 15px">汇总成一段文本</text>
+      </div>
+      <div class="card" if="{{allText}}">
+        <text class="out" style="font-size: 12px">{{allText}}</text>
+      </div>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+// 一条条问后端（NSH 一次一条命令），拿回来拼成信息卡
+const CMDS = [
+  { t: '系统', c: 'uname -a' },
+  { t: '内核版本', c: 'cat /proc/version' },
+  { t: '内存池', c: 'cat /proc/mempool' },
+  { t: '分区表', c: 'cat /proc/partitions' },
+  { t: 'CPU 负载', c: 'cat /proc/cpuload' },
+  { t: '内存（free）', c: 'free' },
+  { t: '挂载点', c: 'mount' },
+  { t: '磁盘占用', c: 'df' }
+]
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    state: '读取中…', cards: [], allText: ''
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.reload()
+  },
+
+  reload() {
+    this.$app.$def.tap()
+    this.cards = []; this.allText = ''
+    this.step(0)
+  },
+
+  step(i) {
+    const self = this
+    if (i >= CMDS.length) { this.state = '点下面可汇总成一段文本'; return }
+    const item = CMDS[i]
+    this.state = '读 ' + item.t + ' …（' + (i + 1) + '/' + CMDS.length + '）'
+    bridge.runCmd(item.c, function (err, res) {
+      let body = ''
+      if (err) body = '✗ ' + err
+      else if (!res || res.status !== 'ok') body = '✗ ' + ((res && res.message) || '没返回')
+      else body = String(res.stdout || '').trim() || '(没有输出)'
+      // 折行显示，窄屏别横向溢出
+      self.cards = self.cards.concat([{ title: item.t + '　' + item.c, body: body }])
+      self.step(i + 1)
+    })
+  },
+
+  copyAll() {
+    this.$app.$def.tap()
+    const out = []
+    for (const c of this.cards) out.push('【' + c.title + '】\n' + c.body)
+    this.allText = out.join('\n\n')
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .head { color: #8e8e93; width: 100%; }
+  .out { color: #d6d6d6; width: 100%; margin-top: 4px; }
+  .gap { width: 100%; height: 14px; }
+</style>

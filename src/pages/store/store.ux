@@ -1,0 +1,156 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">存储分析</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="reload">刷新</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+
+      <!-- 总览 -->
+      <div class="card" if="{{rows.length}}">
+        <text class="sum" style="font-size: 14px">{{totalLine}}</text>
+        <text class="sub" style="font-size: 12px">{{topLine}}</text>
+      </div>
+
+      <!-- 每个应用一行：名字 + 占比条 + 大小 -->
+      <div class="item" for="{{rows}}" tid="s" @click="detail($item)">
+        <div class="bar-wrap">
+          <div class="bar" style="width: {{$item.pct}}%"></div>
+        </div>
+        <div class="item-line">
+          <text class="item-name" style="font-size: 13px">{{$item.name}}</text>
+          <text class="item-size" style="font-size: 12px">{{$item.sizeText}}</text>
+        </div>
+      </div>
+
+      <!-- 选中的应用详情 -->
+      <div class="card" if="{{cur}}">
+        <text class="sum" style="font-size: 14px">{{cur.name}}</text>
+        <text class="sub" style="font-size: 12px">包名 {{cur.package}}</text>
+        <text class="sub" style="font-size: 12px" if="{{cur.version}}">版本 {{cur.version}}</text>
+        <text class="sub" style="font-size: 12px">占用 {{cur.sizeText}}</text>
+        <text class="sub" style="font-size: 12px" if="{{cur.dir}}">目录 {{cur.dir}}</text>
+        <text class="sub" style="font-size: 12px" if="{{cur.visible===false}}">状态：已隐藏</text>
+      </div>
+
+      <div class="pill" if="{{rows.length}}" @click="share">
+        <text class="t-pill" style="font-size: 15px">导出这份清单（文本）</text>
+      </div>
+      <div class="card" if="{{shareText}}">
+        <text class="out" style="font-size: 12px">{{shareText}}</text>
+      </div>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+const TOP_N = 12          // 只对占用最大的前几个查体积，避免一条条问后端拖太久
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    state: '读取中…', rows: [], cur: null, shareText: '', totalLine: '', topLine: ''
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.reload()
+  },
+
+  reload() {
+    const app = this.$app.$def
+    app.tap()
+    const self = this
+    this.state = '读应用清单…'
+    this.cur = null; this.shareText = ''
+    bridge.appList(function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '后端起不来'); return }
+      const items = (res.items || []).map(function (it) {
+        return {
+          package: it.package || it.pkg || it.name || '?',
+          name: it.label || it.name || it.package || '?',
+          version: it.version || it.versionName || '',
+          dir: it.dir || it.path || '',
+          visible: it.visible === undefined ? true : it.visible,
+          size: Number(it.size || 0)
+        }
+      })
+      if (!items.length) { self.state = '后端没返回应用（可能读不到 apps.json）'; return }
+      self.state = items.length + ' 个应用，正在量体积…'
+      self.rows = items.map(function (it) { it.sizeText = it.size ? self.fmt(it.size) : '—'; it.pct = 0; return it })
+      self.measure(items, 0)
+    })
+  },
+
+  /** 逐个问体积；只问前 TOP_N 个（按名字顺序先给列表，量完再排序） */
+  measure(items, i) {
+    const self = this
+    if (i >= items.length || i >= TOP_N) { this.finish(items); return }
+    bridge.call('app_manager', { action: 'app_size', package: items[i].package }, function (err, res) {
+      if (!err && res && res.status === 'ok') {
+        const sz = Number(res.size || res.total || 0)
+        if (sz) items[i].size = sz
+      }
+      items[i].sizeText = items[i].size ? self.fmt(items[i].size) : '—'
+      self.state = '量体积 ' + (i + 1) + '/' + Math.min(items.length, TOP_N)
+      self.measure(items, i + 1)
+    })
+  },
+
+  finish(items) {
+    const self = this
+    const list = items.slice().sort(function (a, b) { return (b.size || 0) - (a.size || 0) })
+    const max = list.length ? (list[0].size || 1) : 1
+    let total = 0
+    for (let i = 0; i < list.length; i++) { total += list[i].size || 0 }
+    list.forEach(function (it) { it.pct = Math.max(2, Math.round((it.size || 0) * 100 / max)) })
+    this.rows = list
+    this.totalLine = '合计 ' + this.fmt(total) + ' · ' + list.length + ' 个应用'
+    this.topLine = list.length ? ('最大 ' + list[0].name + ' ' + list[0].sizeText) : ''
+    this.state = '点一行看详情'
+  },
+
+  detail(it) {
+    this.$app.$def.tap()
+    this.cur = it
+  },
+
+  fmt(n) { return this.$app.$def.fmtBytes(n) },
+
+  share() {
+    this.$app.$def.tap()
+    const lines = ['工具箱 · 存储清单', this.totalLine]
+    for (const it of this.rows) lines.push(it.name + '\t' + it.sizeText + '\t' + it.package)
+    this.shareText = lines.join('\n')
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .sum { color: #ffffff; width: 100%; }
+  .sub { color: #a8a8a8; width: 100%; margin-top: 2px; }
+  .out { color: #d6d6d6; width: 100%; }
+  .item { width: 100%; flex-direction: column; flex-shrink: 0; padding-bottom: 8px; }
+  .bar-wrap { width: 100%; height: 8px; background-color: #1c1c1e; border-radius: 4px; }
+  .bar { height: 8px; background-color: #0d84ff; border-radius: 4px; }
+  .item-line { width: 100%; flex-direction: row; justify-content: space-between; padding-top: 3px; }
+  .item-name { color: #ffffff; flex: 1; }
+  .item-size { color: #a8a8a8; }
+  .gap { width: 100%; height: 14px; }
+</style>
