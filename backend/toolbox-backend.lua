@@ -292,6 +292,11 @@ end
 
 local FILE_GUARD = { delete = true, write = true, copy = true, move = true }
 
+-- 把普通字符串转成 Lua 模式串的安全形式（用于 gsub 的查找串）
+local function escapePattern(t)
+    return (tostring(t):gsub('([%^%$%(%)%%%.%[%]%*%+%-%?])', '%%%1'))
+end
+
 local function doFile(req)
     local path = req.path or ''
     if path == '' then return { status = 'error', message = '路径为空' } end
@@ -338,6 +343,43 @@ local function doFile(req)
         runShell((req.action == 'copy' and 'cp -r "' or 'mv "') .. path .. '" "' .. dest .. '"')
         note((req.action == 'copy' and '复制 ' or '移动 ') .. path:sub(-12))
         return { status = exists(dest) and 'ok' or 'error', path = path, dest = dest }
+    end
+
+    if req.action == 'patch' then
+        -- 详细编辑：追加、查找替换（全部/仅首处）、按行号替换。
+        -- 必须在后端做：前端读文件时只拿到前 1200 字符，改不了整文件。
+        local mode = tostring(req.mode or 'append')
+        local body = readAll(path, 1048576)
+        if body == nil then return { status = 'error', message = '读不到原文件' } end
+        local out = body
+        if mode == 'append' then
+            out = body .. tostring(req.text or '')
+        elseif mode == 'replace' then
+            local find = tostring(req.find or '')
+            if find == '' then return { status = 'error', message = '要查找的内容为空' } end
+            local to = tostring(req.to or '')
+            local pat = escapePattern(find)
+            local out2, n = body:gsub(pat, function() return to end)
+            out = out2
+            if req.firstOnly == true and n > 1 then
+                -- 只替首处：从原文重来，逐字符定位第一次出现
+                local a, b = body:find(find, 1, true)
+                if a then out = body:sub(1, a - 1) .. to .. body:sub(b + 1); n = 1 end
+            end
+            if n == 0 then return { status = 'error', message = '没找到要替换的内容' } end
+        elseif mode == 'line' then
+            local want = tonumber(req.line)
+            if not want or want < 1 then return { status = 'error', message = '行号不对' } end
+            local lines = splitLines(body)
+            if want > #lines then return { status = 'error', message = '文件只有 ' .. #lines .. ' 行' } end
+            lines[want] = tostring(req.text or '')
+            out = table.concat(lines, '\n')
+        else
+            return { status = 'error', message = '不支持的编辑方式：' .. mode }
+        end
+        writeAll(path, out)
+        note('编辑 ' .. path:sub(-12) .. ' (' .. mode .. ')')
+        return { status = 'ok', path = path, mode = mode, bytes = fileSize(path) }
     end
 
     if req.action == 'search' then
@@ -751,16 +793,34 @@ local function doAppManager(req)
         if req.package == nil or req.package == '' then return { status = 'error', message = '缺少 package' } end
         -- 不用 du：NuttX 的 NSH 未必带 du（真机实测算出来是 0）。改成在 Lua 里递归累加，
         -- fileSize 只做 seek 不读内容，几百个文件也很快；上限 500 个文件防极端情况。
+        -- 目录体积。优先用 Luavgl 的 lvgl.fs.open_dir（米环管理就是这么做的：目录项以 / 开头），
+        -- 拿不到再退回 shell 的 ls -1。
         local function sizeOf(dir, depth, acc)
             if depth > 6 or acc.n >= 500 then return end
-            local names = runShell('ls -1 "' .. dir .. '"')
-            if not names or names == '' then return end
-            local list = splitLines(names)
-            for i = 1, #list do
-                local nm = list[i]
+            local entries = nil
+            if lvgl and lvgl.fs and lvgl.fs.open_dir then
+                local ok, dh = pcall(lvgl.fs.open_dir, dir)
+                if ok and dh then
+                    entries = {}
+                    while true do
+                        local d = dh:read()
+                        if not d then break end
+                        entries[#entries + 1] = d
+                    end
+                end
+            end
+            if not entries then
+                local names = runShell('ls -1 "' .. dir .. '"')
+                if not names or names == '' then return end
+                entries = splitLines(names)
+            end
+            for i = 1, #entries do
+                local nm = entries[i]
+                local isDirEntry = nm:sub(1, 1) == '/'
+                if isDirEntry then nm = nm:sub(2) end
                 if nm ~= '' and nm ~= '.' and nm ~= '..' then
                     local full = dir .. '/' .. nm
-                    if isDir(full) then
+                    if isDirEntry or isDir(full) then
                         sizeOf(full, depth + 1, acc)
                     else
                         local sz = fileSize(full)
@@ -770,7 +830,16 @@ local function doAppManager(req)
                 end
             end
         end
-        local bases = { req.root, '/data/quickapp', '/data/files/quickapp', '/data/data/quickapp' }
+        -- 应用装在 app/ 下（米环管理 3.0 里的常量：P65 及之前是 /data/quickapp/app/，P67 是 /data/app/）
+        local bases = {}
+        if type(req.root) == 'string' and req.root ~= '' then
+            bases[#bases + 1] = req.root .. '/app'
+            bases[#bases + 1] = req.root
+        end
+        bases[#bases + 1] = '/data/quickapp/app'
+        bases[#bases + 1] = '/data/app'
+        bases[#bases + 1] = '/data/quickapp'
+        bases[#bases + 1] = '/data/files/quickapp'
         local bytes, used, files = 0, '', 0
         for i = 1, #bases do
             if type(bases[i]) == 'string' and bases[i] ~= '' then
@@ -791,52 +860,65 @@ local function doAppManager(req)
                      message = '这个动作会改动已装应用（' .. action .. '），请带 confirm=true 再试' }
         end
         if req.package == nil or req.package == '' then return { status = 'error', message = '缺少 package' } end
-        -- 照原版的做法：改系统的 apps.json，在「已装」与「已隐藏」两个列表之间搬；删除就是移出列表。
-        -- 动手前先备份 .bak，出问题能还原。
-        local roots = { '/data/quickapp/apps.json', '/data/apps.json', '/data/files/quickapp/apps.json' }
-        for i = 1, #roots do
-            local path = roots[i]
-            local data = readJson(path)
-            if type(data) == 'table' and type(data.InstalledApps) == 'table' then
-                if type(data.HiddenApps) ~= 'table' then data.HiddenApps = {} end
-                local moved = nil
-                local keep = {}
-                for j = 1, #data.InstalledApps do
-                    local item = data.InstalledApps[j]
-                    if type(item) == 'table' and tostring(item.package) == req.package then moved = item
-                    else keep[#keep + 1] = item end
-                end
-                if action == 'delete' then
-                    if not moved then return { status = 'error', message = '在列表里没找到这个应用' } end
-                    data.InstalledApps = keep
-                    runShell('rm -rf "/data/quickapp/' .. tostring(req.package) .. '"')
-                    note('删除应用 ' .. tostring(req.package))
-                elseif moved then
-                    data.InstalledApps = keep
-                    data.HiddenApps[#data.HiddenApps + 1] = moved
-                    note('隐藏应用 ' .. tostring(req.package))
-                else
-                    local back = nil
-                    local hk = {}
-                    for j = 1, #data.HiddenApps do
-                        local item = data.HiddenApps[j]
-                        if type(item) == 'table' and tostring(item.package) == req.package then back = item
-                        else hk[#hk + 1] = item end
-                    end
-                    if not back then return { status = 'error', message = '在隐藏列表里也没找到' } end
-                    data.HiddenApps = hk
-                    data.InstalledApps[#data.InstalledApps + 1] = back
-                    note('恢复应用 ' .. tostring(req.package))
-                end
-                runShell('cp "' .. path .. '" "' .. path .. '.bak"')
-                if writeAll(path, jsonEncode(data)) then
-                    return { status = 'ok', file = path, package = req.package, action = action,
-                             backup = path .. '.bak', message = '已改系统应用列表（备份在同目录 .bak）' }
-                end
-                return { status = 'error', message = '写不进 ' .. path .. '（没权限）' }
-            end
+        -- 按米环管理 3.0 的做法：隐藏 = 把条目从 apps.json 搬到同目录的 apps.json_hide；
+        -- 恢复 = 反向搬；删除 = 从两个文件里都移掉。**不删文件目录**（参照米环管理，不做 rm -rf）。
+        -- 每次写之前先 cp 一份 .bak。
+        local cands = { '/data/quickapp/apps.json', '/data/apps.json', '/data/files/quickapp/apps.json' }
+        local jsonPath = nil
+        for i = 1, #cands do
+            if exists(cands[i]) then jsonPath = cands[i]; break end
         end
-        return { status = 'error', message = '读不到系统的 apps.json（位置不确定，需要真机确认）' }
+        if jsonPath == nil then
+            return { status = 'error', message = '找不到系统的 apps.json（试过：' .. table.concat(cands, ' , ') .. '）' }
+        end
+        local hidePath = jsonPath .. '_hide'
+        local installed = readJson(jsonPath)
+        if type(installed) ~= 'table' or type(installed.InstalledApps) ~= 'table' then
+            return { status = 'error', message = 'apps.json 结构不认识（没有 InstalledApps 数组）' }
+        end
+        local hidden = readJson(hidePath)
+        if type(hidden) ~= 'table' then hidden = { InstalledApps = {} } end
+        if type(hidden.InstalledApps) ~= 'table' then hidden.InstalledApps = {} end
+
+        local function takeFrom(list, pkg)
+            local hit, keep = nil, {}
+            for j = 1, #list do
+                local it = list[j]
+                if type(it) == 'table' and tostring(it.package) == pkg then hit = it
+                else keep[#keep + 1] = it end
+            end
+            return hit, keep
+        end
+
+        local moved, keepInstalled = takeFrom(installed.InstalledApps, req.package)
+        local dupHidden, keepHidden = takeFrom(hidden.InstalledApps, req.package)
+        local verb
+        if action == 'delete' then
+            if not moved and not dupHidden then
+                return { status = 'error', message = '两个列表里都没找到这个应用' }
+            end
+            installed.InstalledApps = keepInstalled
+            hidden.InstalledApps = keepHidden
+            verb = '删除'
+        elseif moved then
+            installed.InstalledApps = keepInstalled
+            hidden.InstalledApps = keepHidden
+            hidden.InstalledApps[#hidden.InstalledApps + 1] = moved
+            verb = '隐藏'
+        else
+            if not dupHidden then return { status = 'error', message = '在隐藏列表里也没找到' } end
+            hidden.InstalledApps = keepHidden
+            installed.InstalledApps[#installed.InstalledApps + 1] = dupHidden
+            verb = '恢复'
+        end
+        runShell('cp "' .. jsonPath .. '" "' .. jsonPath .. '.bak"')
+        if not writeAll(jsonPath, jsonEncode(installed)) then
+            return { status = 'error', message = '写不进 ' .. jsonPath .. '（没权限）' }
+        end
+        writeAll(hidePath, jsonEncode(hidden))
+        note(verb .. '应用 ' .. tostring(req.package))
+        return { status = 'ok', package = req.package, action = action, file = jsonPath, hideFile = hidePath,
+                 backup = jsonPath .. '.bak', message = '已' .. verb .. '（apps.json 已备份为 .bak）' }
     end
     return { status = 'error', message = '不支持的 action：' .. tostring(action) }
 end

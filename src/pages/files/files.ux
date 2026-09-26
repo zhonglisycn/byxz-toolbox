@@ -90,6 +90,8 @@ export default {
     path: '/', items: [], state: '正在列目录…', text: '',
     // 编辑：viewPath = 当前查看的文件；draft = 正在输入的新内容；armed = 已按过一次保存（二次确认）
     viewPath: '', draft: '', armed: false, kbOn: false, saving: false, editHint: '',
+    modeHelp: '', saveLabel: '保存（覆盖）',
+    editMode: 'overwrite',
     mode: '', needle: '', results: [], searchHint: ''
   },
 
@@ -188,23 +190,53 @@ export default {
     this.tap({ d: it.path })
   },
 
+  setMode(m) {
+    this.$app.$def.tap()
+    this.editMode = m
+    this.armed = false
+    if (m === 'append') { this.modeHelp = '把输入追加到文件末尾'; this.saveLabel = '追加到末尾' }
+    else if (m === 'replace') { this.modeHelp = '输入「被替换的=替换成」，按原样匹配（不看正则）'; this.saveLabel = '执行替换' }
+    else if (m === 'line') { this.modeHelp = '输入「行号=新内容」，例如 3=hello'; this.saveLabel = '替换该行' }
+    else { this.modeHelp = '整份替换：输入的内容会成为文件全部内容'; this.saveLabel = '保存（覆盖）' }
+  },
+
   saveFile() {
     const app = this.$app.$def
     app.tap()
     if (!this.viewPath) { this.editHint = '没有选中的文件'; return }
     if (!this.draft) { this.editHint = '新内容是空的，先输入再保存'; return }
-    if (!this.armed) { this.armed = true; this.editHint = '覆盖写会替换整个文件；确认无误就再点一次'; return }
+    // 二次确认：改的是系统文件，写坏就麻烦
+    if (!this.armed) {
+      this.armed = true
+      this.editHint = (this.modeHelp || '') + '　—— 确认无误再点一次'
+      return
+    }
     const self = this
     this.saving = true
     this.editHint = '写入中…'
-    bridge.writeFile(this.viewPath, this.draft, function (err, res) {
+    const req = { action: 'patch', path: this.viewPath, mode: this.editMode, confirm: true }
+    if (this.editMode === 'replace') {
+      const i = this.draft.indexOf('=')
+      if (i < 0) { this.saving = false; this.armed = false; this.editHint = '✗ 格式应为 被替换的=替换成'; return }
+      req.find = this.draft.slice(0, i); req.to = this.draft.slice(i + 1)
+    } else if (this.editMode === 'line') {
+      const i = this.draft.indexOf('=')
+      if (i < 0) { this.saving = false; this.armed = false; this.editHint = '✗ 格式应为 行号=新内容'; return }
+      req.line = Number(this.draft.slice(0, i)); req.text = this.draft.slice(i + 1)
+    } else {
+      req.text = this.draft
+    }
+    const done = function (err, res) {
       self.saving = false
       self.armed = false
       if (err) { self.editHint = '✗ ' + err; return }
       if (!res || res.status !== 'ok') { self.editHint = '✗ ' + ((res && res.message) || '写不进去'); return }
-      self.editHint = '✓ 已写入 ' + self.viewPath
+      self.editHint = '✓ 已写入 ' + self.viewPath + '（' + (res.bytes || 0) + ' 字节）'
+      self.draft = ''
       self.tap({ d: self.viewPath })          // 重新读一遍看结果
-    })
+    }
+    if (this.editMode === 'overwrite') bridge.writeFile(this.viewPath, this.draft, done)
+    else bridge.call('file', req, done)
   },
 
   cancelEdit() {
@@ -239,4 +271,7 @@ export default {
   .inputbar { width: 100%; height: 40px; flex-direction: row; align-items: center; padding-left: 12px; padding-right: 12px; margin-bottom: 6px; flex-shrink: 0; background-color: #1c1c1e; border-radius: 14px; }
   .ib-text { color: #ffffff; flex: 1; }
   .ib-hint { color: #8e8e93; }
+  .chips { width: 100%; flex-direction: row; flex-wrap: wrap; flex-shrink: 0; margin-bottom: 4px; }
+  .chip { flex-direction: row; align-items: center; border-radius: 12px; padding: 5px 10px; margin: 0 6px 6px 0; background-color: #1c1c1e; }
+  .chip-t { color: #ffffff; }
 </style>
