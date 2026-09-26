@@ -23,3 +23,4 @@ attic/backend-port-搁置/
 # ---------- 文档里的位图与第三方预览图 ----------
 docs/*.png
 tools/preview/prew-upstream.png
+backend/_variant.lua
