@@ -138,7 +138,7 @@ os.makedirs(OUT, exist_ok=True)
 for name, body, desc in variants:
     tmp = 'backend/_variant.lua'
     io.open(tmp, 'w', encoding='utf-8', newline='\n').write(body)
-    subprocess.check_call([sys.executable, 'tools/backend-port/pack-luavgl.py', SRC_BIN, tmp,
+    subprocess.check_call([sys.executable, 'tools/backend/pack-luavgl.py', SRC_BIN, tmp,
                            os.path.join(OUT, name)], stdout=subprocess.DEVNULL)
     print('%-22s %-28s %8d 字节  Lua %d 字节' % (name, desc, os.path.getsize(os.path.join(OUT, name)), len(body.encode('utf-8'))))
 os.remove('backend/_variant.lua')

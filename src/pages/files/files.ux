@@ -40,6 +40,28 @@
         </div>
       </div>
 
+      <!-- 找内容：递归找“哪个文件里有这个字串” -->
+      <div class="pill pill-quiet" @click="startSearch">
+        <text class="t-pill" style="font-size: 15px">在当前目录里找内容（含子目录）</text>
+      </div>
+      <div class="padwrap" if="{{mode==='search'}}">
+        <div class="inputbar" @click="toggleKb">
+          <text class="ib-text" style="font-size: 13px">{{needle ? needle : '点这里输入要搜的字串'}}</text>
+          <text class="ib-hint" style="font-size: 11px">{{kbOn ? '收起' : '输入'}}</text>
+        </div>
+        <text class="sec" style="font-size: 12px">{{searchHint}}</text>
+        <div class="pill" @click="doSearch">
+          <text class="t-pill" style="font-size: 15px">开始搜索（最多 200 个文件 / 50 条结果）</text>
+        </div>
+      </div>
+      <div class="row" for="{{results}}" tid="r" @click="openResult($item)">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 13px">{{$item.path}}</text>
+          <text class="row-sub" style="font-size: 12px">第 {{$item.line}} 行 {{$item.text}}</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
       <div class="gap"></div>
     </scroll>
 
@@ -67,7 +89,8 @@ export default {
     padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
     path: '/', items: [], state: '正在列目录…', text: '',
     // 编辑：viewPath = 当前查看的文件；draft = 正在输入的新内容；armed = 已按过一次保存（二次确认）
-    viewPath: '', draft: '', armed: false, kbOn: false, saving: false, editHint: ''
+    viewPath: '', draft: '', armed: false, kbOn: false, saving: false, editHint: '',
+    mode: '', needle: '', results: [], searchHint: ''
   },
 
   onShow() {
@@ -125,13 +148,44 @@ export default {
   onKbInput(evt) {
     const t = evt && evt.detail && evt.detail.content ? String(evt.detail.content) : ''
     if (!t) return
+    if (this.mode === 'search') { this.needle = (this.needle + t).slice(0, 30); return }
     this.draft = (this.draft + t).slice(0, 2000)
     this.armed = false
   },
 
   onKbDelete() {
+    if (this.mode === 'search') { this.needle = this.needle.slice(0, -1); return }
     this.draft = this.draft.slice(0, -1)
     this.armed = false
+  },
+
+  /* ---------- 找内容 ---------- */
+  startSearch() {
+    this.$app.$def.tap()
+    this.mode = 'search'
+    this.results = []
+    this.searchHint = '在 ' + this.path + ' 下递归找（深度 4）'
+  },
+
+  doSearch() {
+    this.$app.$def.tap()
+    const self = this
+    if (!this.needle) { this.searchHint = '先输入要找的字串'; return }
+    this.results = []
+    this.searchHint = '搜索中…（文件多时会慢一点）'
+    bridge.call('file', { action: 'search', path: this.path, needle: this.needle, depth: 4, limit: 200 }, function (err, res) {
+      if (err) { self.searchHint = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.searchHint = '✗ ' + ((res && res.message) || '搜不了'); return }
+      const items = res.items || []
+      self.results = items
+      self.searchHint = items.length ? ('找到 ' + items.length + ' 处（扫了 ' + (res.scanned || 0) + ' 个文件）') : ('没找到（扫了 ' + (res.scanned || 0) + ' 个文件）')
+    })
+  },
+
+  openResult(it) {
+    this.$app.$def.tap()
+    this.mode = ''; this.kbOn = false
+    this.tap({ d: it.path })
   },
 
   saveFile() {

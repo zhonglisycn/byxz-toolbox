@@ -219,7 +219,8 @@ export function fileInfo(path, cb) { call('file', { action: 'info', path: path }
 
 /** 写文件（覆盖）。后端要求显式 confirm，这里固定带上——调用方负责在界面上做二次确认 */
 export function writeFile(path, content, cb) {
-  call('file', { action: 'write', path: path, text: String(content || ''), confirm: true }, cb)
+  // 后端读的是 req.content；发 text 会被忽略成空串（会把文件写空）
+  call('file', { action: 'write', path: path, content: String(content || ''), confirm: true }, cb)
 }
 
 /** 监控：开始 / 停止 / 状态（悬浮层那两项先不做，免得挡界面） */

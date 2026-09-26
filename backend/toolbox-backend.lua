@@ -340,6 +340,52 @@ local function doFile(req)
         return { status = exists(dest) and 'ok' or 'error', path = path, dest = dest }
     end
 
+    if req.action == 'search' then
+        -- 递归找“哪个文件里有这个字串”。限深度/文件数/单文件读取量，避免把设备拖死。
+        local needle = tostring(req.needle or '')
+        if needle == '' then return { status = 'error', message = '要搜的内容为空' } end
+        local root = req.path or '/data'
+        local maxDepth = tonumber(req.depth) or 4
+        local maxFiles = tonumber(req.limit) or 200
+        local maxRead = 8192
+        local hits, scanned = {}, 0
+        -- 后端没有 listDir 助手，列目录走 shell（NSH 只认 >，不能写 2>）
+        local function namesOf(dir)
+            local raw = runShell('ls -1 "' .. dir .. '"')
+            if not raw or raw == '' then return nil end
+            return splitLines(raw)
+        end
+        local visit
+        visit = function(dir, depth)
+            if depth > maxDepth or scanned >= maxFiles or #hits >= 50 then return end
+            local names = namesOf(dir)
+            if not names then return end
+            for _, nm in ipairs(names) do
+                if scanned >= maxFiles or #hits >= 50 then return end
+                local full = (dir == '/' and '/' or (dir .. '/')) .. nm
+                if isDir(full) then
+                    if nm ~= '.' and nm ~= '..' then visit(full, depth + 1) end
+                else
+                    scanned = scanned + 1
+                    local body = readAll(full, maxRead)
+                    if body and body:find(needle, 1, true) then
+                        local line = 1
+                        for seg in body:gmatch('[^%c]+') do
+                            if seg:find(needle, 1, true) then
+                                hits[#hits + 1] = { path = full, line = line, text = seg:sub(1, 80) }
+                                break
+                            end
+                            line = line + 1
+                        end
+                    end
+                end
+            end
+        end
+        visit(root, 1)
+        note('搜索 ' .. needle:sub(1, 12))
+        return { status = 'ok', needle = needle, root = root, scanned = scanned, items = hits }
+    end
+
     if req.action == 'write' then
         if not writeAll(path, req.content or '') then
             return { status = 'error', message = '写不进去（目录不存在或没权限）' }
