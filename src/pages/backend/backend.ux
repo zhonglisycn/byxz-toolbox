@@ -118,6 +118,9 @@ export default {
               mark('体积探针', okProbe
                 ? (pb.dir + ' · ' + pb.files + ' 个文件 · ' + Math.round((pb.bytes || 0) / 1024) + ' KB · ' + (pb.ms || 0) + 'ms')
                 : ('没扫到目录（试过 /data/quickapp/app、/data/app 下的 ' + (pb.pkg || '?') + '）'), okProbe)
+              mark('应用目录内容', (sc.appDir ? sc.appDir + ' → ' : '') + ((sc.appDirNames || []).join(' ') || '（空或没这个目录）'), (sc.appDirNames || []).length > 0)
+              const mt = (sc.mounts || []).join(' | ')
+              mark('挂载点', mt || '(读不到 /proc/mounts)', !!mt)
               const ps = (sc.psHead || []).slice(0, 2).join(' | ')
               mark('ps 头两行', ps || '(空)', !!ps)
               mark('结论', okProbe ? '后端这条链是通的' : '后端在跑，但应用目录没找到——把上面“缺的目录”那行发给作者', true)

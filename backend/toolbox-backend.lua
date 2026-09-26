@@ -18,7 +18,7 @@
 local SW = lvgl.HOR_RES()
 local SH = lvgl.VER_RES()
 
-local VERSION = 'byxz-toolbox-backend 0.4.8'
+local VERSION = 'byxz-toolbox-backend 0.4.9'
 local OUT_LIMIT = 32768
 local LOG_KEEP = 12                          -- 终端页保留最近几条
 
@@ -1089,6 +1089,34 @@ local function doSystem(req)
                 end
             end
         end
+        -- 目录里到底有什么（ELF 模块？rpk？），以及各文件系统挂在哪
+        local appDirNames, appDirUsed = {}, ''
+        local scanDirs = { '/data/quickapp/app', '/data/app', '/data/quickapp' }
+        for i = 1, #scanDirs do
+            if isDir(scanDirs[i]) then
+                local names = runShell('ls -1 "' .. scanDirs[i] .. '"')
+                if names and names ~= '' then
+                    local list = splitLines(names)
+                    appDirUsed = scanDirs[i]
+                    for j = 1, math.min(#list, 8) do appDirNames[#appDirNames + 1] = list[j] end
+                    -- 再看第一个子目录里有什么（应用本体通常在 <pkg>/ 下）
+                    local first = list[1]
+                    if first then
+                        local inner = runShell('ls -1 "' .. scanDirs[i] .. '/' .. first .. '"')
+                        if inner and inner ~= '' then
+                            local il = splitLines(inner)
+                            for j = 1, math.min(#il, 5) do
+                                appDirNames[#appDirNames + 1] = first .. '/' .. il[j]
+                            end
+                        end
+                    end
+                    break
+                end
+            end
+        end
+        local mounts = {}
+        local mnt = runLines('cat /proc/mounts')
+        for i = 1, math.min(#mnt, 8) do mounts[#mounts + 1] = mnt[i] end
         local psHead = {}
         local ps = runLines('ps')
         for i = 1, math.min(#ps, 4) do psHead[#psHead + 1] = ps[i] end
@@ -1096,7 +1124,8 @@ local function doSystem(req)
         return { status = 'ok', backend = VERSION,
                  lvglFs = (type(lvgl) == 'table' and type(lvgl.fs) == 'table') and true or false,
                  dirs = out, appsJson = found, appCount = count, entryKeys = keys,
-                 sizeProbe = probe, psHead = psHead }
+                 sizeProbe = probe, psHead = psHead,
+                 appDir = appDirUsed, appDirNames = appDirNames, mounts = mounts }
     end
     return { status = 'error', message = '不支持的 action：' .. action }
 end
