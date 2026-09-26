@@ -615,17 +615,36 @@ local function doAppManager(req)
         local cands = { '/data/quickapp/apps.json', '/data/apps.json', '/data/files/quickapp/apps.json',
                         '/data/quickapp/files/apps.json', '/data/data/quickapp/apps.json' }
         local tried = {}
+        local keys = {}
         local function listOf(data)
             local items = {}
             if type(data) ~= 'table' then return nil end
+            -- 字段名兼容：不同固件/版本的 apps.json 用过 package / pkg / name / bundleName / id …
+            local function firstOf(t, keys)
+                for i = 1, #keys do
+                    local x = t[keys[i]]
+                    if type(x) == 'string' and x ~= '' then return x end
+                end
+                return nil
+            end
             local function addOne(v, forced)
                 if type(v) ~= 'table' then return end
-                local pkg = v.package or v.pkg or v.name
+                local pkg = firstOf(v, { 'package', 'pkg', 'bundleName', 'bundle', 'id', 'name' })
                 if pkg == nil then return end
-                items[#items + 1] = { pkg = tostring(pkg), name = tostring(v.name or ''),
+                local nm = firstOf(v, { 'label', 'name', 'title', 'appName', 'displayName' }) or pkg
+                items[#items + 1] = { pkg = pkg, name = nm,
                                       visible = (forced ~= nil) and forced or (v.visible ~= false) }
             end
+            local function keyList(v)
+                local ks = {}
+                if type(v) ~= 'table' then return ks end
+                for k, x in pairs(v) do
+                    if type(x) ~= 'table' then ks[#ks + 1] = tostring(k) end
+                end
+                return ks
+            end
             if type(data.InstalledApps) == 'table' then
+                keys = keyList(data.InstalledApps[1])
                 for i = 1, #data.InstalledApps do addOne(data.InstalledApps[i], true) end
                 if type(data.HiddenApps) == 'table' then
                     for i = 1, #data.HiddenApps do addOne(data.HiddenApps[i], false) end
@@ -633,7 +652,12 @@ local function doAppManager(req)
                 return items
             end
             for k, v in pairs(data) do
-                if type(v) == 'table' then addOne(v) else items[#items + 1] = { pkg = tostring(k), name = tostring(v), visible = true } end
+                if type(v) == 'table' then
+                    if #keys == 0 then keys = keyList(v) end
+                    addOne(v)
+                else
+                    items[#items + 1] = { pkg = tostring(k), name = tostring(v), visible = true }
+                end
             end
             return items
         end
@@ -644,7 +668,8 @@ local function doAppManager(req)
             local items = listOf(data)
             if items and #items > 0 then
                 note('应用列表 ' .. #items)
-                return { status = 'ok', source = cands[i], items = items, count = #items }
+                return { status = 'ok', source = cands[i], items = items, count = #items,
+                         root = cands[i]:match('^(.*)/[^/]+$') or '', keys = keys }
             end
         end
         -- 再扫 /data 下一层（有界：只列一层目录 + 试几个固定组合）
@@ -660,13 +685,15 @@ local function doAppManager(req)
                     local items1 = listOf(readJson(w1))
                     if items1 and #items1 > 0 then
                         note('应用列表 ' .. #items1 .. '（扫描找到）')
-                        return { status = 'ok', source = w1, items = items1, count = #items1 }
+                        return { status = 'ok', source = w1, items = items1, count = #items1,
+                                 root = w1:match('^(.*)/[^/]+$') or '', keys = keys }
                     end
                     local w2 = dirs[d] .. '/' .. nm[j] .. '/quickapp/apps.json'
                     local items2 = listOf(readJson(w2))
                     if items2 and #items2 > 0 then
                         note('应用列表 ' .. #items2 .. '（扫描找到）')
-                        return { status = 'ok', source = w2, items = items2, count = #items2 }
+                        return { status = 'ok', source = w2, items = items2, count = #items2,
+                                 root = w2:match('^(.*)/[^/]+$') or '', keys = keys }
                     end
                 end
             end
@@ -677,9 +704,17 @@ local function doAppManager(req)
     end
     if action == 'app_size' then
         if req.package == nil or req.package == '' then return { status = 'error', message = '缺少 package' } end
-        local out = runShell('du -sk "/data/quickapp/' .. req.package .. '"')
-        local kb = tonumber(out:match('(%d+)'))
-        return { status = 'ok', package = req.package, kb = kb or 0 }
+        -- 安装目录不一定是 /data/quickapp：优先用前端带过来的 root（apps 动作会一并返回），再退回常见位置
+        local roots = { req.root, '/data/quickapp', '/data/files/quickapp', '/data/data/quickapp' }
+        local kb, used = 0, ''
+        for i = 1, #roots do
+            if type(roots[i]) == 'string' and roots[i] ~= '' then
+                local out = runShell('du -sk "' .. roots[i] .. '/' .. req.package .. '"')
+                local n = tonumber(out:match('(%d+)'))
+                if n and n > 0 then kb = n; used = roots[i]; break end
+            end
+        end
+        return { status = 'ok', package = req.package, kb = kb, root = used }
     end
     if action == 'set_visible' or action == 'delete' then
         if req.confirm ~= true then

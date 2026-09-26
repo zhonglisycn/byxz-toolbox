@@ -15,16 +15,8 @@
         </div>
       </div>
 
-      <text class="sec" style="font-size: 12px">本批次已完成</text>
-      <div class="row" for="{{done}}" tid="d">
-        <div class="row-main">
-          <text class="row-title" style="font-size: 15px">{{$item.k}}</text>
-          <text class="row-sub" style="font-size: 12px">{{$item.v}}</text>
-        </div>
-      </div>
-
-      <text class="sec" style="font-size: 12px">后续批次待做</text>
-      <div class="row" for="{{todo}}" tid="t">
+      <text class="sec" style="font-size: 12px">功能</text>
+      <div class="row" for="{{features}}" tid="f">
         <div class="row-main">
           <text class="row-title" style="font-size: 15px">{{$item.k}}</text>
           <text class="row-sub" style="font-size: 12px">{{$item.v}}</text>
@@ -64,20 +56,16 @@ export default {
     beText: '检测中…',
     beSub: '表盘位 Lua 后端（终端/文件/监控等要靠它）',
     screenLine: '',
-    done: [
-      { k: '设备信息', v: '型号、系统、屏幕、代号（读系统接口）' },
-      { k: '屏幕亮度', v: '读写亮度、屏幕常亮（接口不支持时如实提示）' },
-      { k: '振动', v: '短振/长振/连振测试，按键反馈开关' },
-      { k: '缓存与清理', v: '本应用存档查看与清空' },
-      { k: '设置', v: '振动、界面留白（三档，全屏 / 留边 / 保守）' },
-      { k: '多机型适配层', v: '按屏宽分档（192 / 212 / 336），页面不再写死尺寸' }
-    ],
-    todo: [
-      { k: '第 2 批 · 文件', v: '文件浏览、只读查看、书签与历史' },
-      { k: '第 3 批 · 文本与应用', v: '文本编辑、应用管理、缓存清理（系统级）' },
-      { k: '第 4 批 · 截图', v: '截图、预览、同步到手机、HTTP 直传' },
-      { k: '第 5 批 · 网络与日志', v: '网络传输、测速、日志与日志历史' },
-      { k: '第 6 批 · 性能与调试', v: '内存/CPU 监控、JS/Lua/MCU 算力、调试菜单（危险项只读）' }
+    features: [
+      { k: '终端', v: '自己敲命令执行；命令历史与脚本' },
+      { k: '监控 · 更多工具', v: 'CPU 负载、内存分池、进程列表、算力跑分与历史' },
+      { k: '文件', v: '浏览、看文本与十六进制、就地编辑、递归找内容' },
+      { k: '存储分析', v: '各应用占用排行、详情，可导出清单' },
+      { k: '本机信息', v: '内核 / 内存池 / 分区表 / 挂载 / df 一页看全' },
+      { k: '系统管家', v: '内存·CPU·进程体检与处理建议（只提示，不替你动手）' },
+      { k: '应用管理 · 系统属性', v: '隐藏 / 恢复 / 删除应用，改 getprop（都要二次确认）' },
+      { k: '后端诊断 · 日志', v: '六步通信自检与后端日志回读' },
+      { k: '设置 · 关于', v: '按键振动、界面留白（三档）、导出配置与用法' }
     ]
   },
 

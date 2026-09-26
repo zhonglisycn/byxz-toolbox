@@ -15,6 +15,7 @@
       <div class="card" if="{{rows.length}}">
         <text class="sum" style="font-size: 14px">{{totalLine}}</text>
         <text class="sub" style="font-size: 12px">{{topLine}}</text>
+        <text class="sub" style="font-size: 12px" if="{{srcLine}}">{{srcLine}}</text>
       </div>
 
       <!-- 每个应用一行：名字 + 占比条 + 大小 -->
@@ -58,7 +59,8 @@ const TOP_N = 12          // 只对占用最大的前几个查体积，避免一
 export default {
   private: {
     padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
-    state: '读取中…', rows: [], cur: null, shareText: '', totalLine: '', topLine: ''
+    state: '读取中…', rows: [], cur: null, shareText: '', totalLine: '', topLine: '',
+    root: '', srcLine: ''
   },
 
   onShow() {
@@ -76,6 +78,7 @@ export default {
     this.cur = null; this.shareText = ''
     bridge.appList(function (err, res) {
       if (err) { self.state = '✗ ' + err; return }
+      if (res && res.status === 'ok') { self.root = res.root || ''; self.srcLine = '清单来自 ' + (res.source || '?') }
       if (!res || res.status !== 'ok') {
         self.state = '✗ ' + ((res && res.message) || '后端起不来')
         // 后端找不到 apps.json 时会把试过的路径与 /data 下的目录一并返回——照抄给用户，便于定位
@@ -105,7 +108,7 @@ export default {
   measure(items, i) {
     const self = this
     if (i >= items.length || i >= TOP_N) { this.finish(items); return }
-    bridge.call('app_manager', { action: 'app_size', package: items[i].package }, function (err, res) {
+    bridge.call('app_manager', { action: 'app_size', package: items[i].package, root: this.root }, function (err, res) {
       if (!err && res && res.status === 'ok') {
         const sz = Number(res.size || res.total || 0)
         if (sz) items[i].size = sz

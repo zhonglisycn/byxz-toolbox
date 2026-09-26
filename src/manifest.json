@@ -1,8 +1,8 @@
 {
   "package": "com.byxz.toolbox",
   "name": "工具箱",
-  "versionName": "1.2.2",
-  "versionCode": 122,
+  "versionName": "1.2.3",
+  "versionCode": 123,
   "minPlatformVersion": 1000,
   "icon": "/common/icon/logo.png",
   "deviceTypeList": [
