@@ -1,0 +1,8 @@
+* text=auto
+*.sh text eol=lf
+*.ux text
+*.js text
+*.json text
+*.lua text
+*.png binary
+*.bin binary

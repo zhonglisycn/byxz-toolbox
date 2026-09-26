@@ -1,0 +1,34 @@
+MIT License
+
+Copyright (c) 2026 模糊二维码byxz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+第三方致谢与来源
+
+1. 计算器的界面布局与配色、以及"精确形式"（π、√、分数）的展示思路，参考了
+   Open_Modular_Boardgame_Companion（MIT License, Copyright (c) 2025 MinimumBubble11）：
+   https://github.com/MinimumBubble11/Open_Modular_Boardgame_Companion
+2. 界面版式（行式列表 / 功能项开关 / 胶囊按钮等）参考了一份手环 UI 设计稿
+   「[NPlus Novaxis] 小米手环 10 (O66) — UI 参考」。
+
+本工程的表达式解析、方程求解、函数图像采样与符号求导均为自行实现（未复制其代码），
+图标为自绘，故本工程产出的 .bin 可自由分发。

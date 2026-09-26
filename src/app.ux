@@ -1,0 +1,117 @@
+<script>
+/**
+ * 应用级：设备信息 + 多机型适配 + 偏好设置。
+ *
+ * 为什么要有一个"适配层"：同一套代码要跑 192(手环9)、212(手环10)、336(10 Pro) 三种屏宽，
+ * 还有圆屏/胶囊屏两种形状。页面里到处写 if (w === 212) 是灾难，所以统一在这里
+ * 算出 tier（屏宽档）与 pad（安全留白），页面只读结果。
+ *
+ * designWidth 用 "device-width"：1 设计像素 = 1 物理像素，尺寸可以按真机数字写，
+ * 再用媒体查询按屏宽分档（原版也是这么适配的）。
+ */
+import device from '@system.device'
+import bridge from './common/core/bridge'
+import vibrator from '@system.vibrator'
+import { loadKey, saveKey } from './common/core/util'
+
+export default {
+  info: null,        // device.getInfo() 的原始结果
+  ready: false,      // 设备信息是否已回来
+  w: 212,            // 屏宽（物理像素）
+  h: 520,            // 屏高
+  shape: 'rect',     // rect | circle
+  tier: 'm',         // s=192  m=212  l=336（媒体查询里也用同一套阈值）
+  tierName: '',
+
+  vib: true,
+
+  // 界面留白：胶囊屏上下是半圆，但内容能滑动，所以半圆不是禁区。
+  // 全屏最省地方；留边/保守是给"贴边看着难受"的人用的。
+  PAD_PRESETS: [
+    // 全屏档左右仍留 12px：列表卡片贴着屏幕边缘不好看（上下真的 0）
+    { name: '全屏', top: 0, bottom: 0, side: 12 },
+    { name: '留边', top: 30, bottom: 32, side: 14 },
+    { name: '保守', top: 50, bottom: 50, side: 14 }
+  ],
+  padMode: 0,
+  padTop: 0,
+  padBottom: 0,
+  padSide: 0,
+  padName: '全屏',
+  fsTitle: 17,        // 标题字号：按屏宽分档（336 上放大、192 上收一点）
+  fsNav: 16,          // 顶栏按钮字号
+
+  onCreate() {
+    this.readDevice()
+    // 向后端（表盘位的 Lua 应用）报到：写 device_info.json。
+    // 后端靠这个文件在自己的候选目录里认出我们；越早写越好。
+    bridge.announce(function (err) { if (err) console.log('后端报到失败: ' + err) })
+    loadKey('tb_vib', (ok, v) => { this.vib = ok ? v === '1' : true })
+    loadKey('tb_pad', (ok, v) => {
+      const i = ok ? parseInt(v, 10) : NaN
+      this.setPad(isNaN(i) ? 0 : i, true)
+    })
+  },
+
+  /** 读设备信息；拿不到也不影响用（用默认值兜底） */
+  readDevice() {
+    const self = this
+    try {
+      device.getInfo({
+        success: function (r) {
+          self.info = r
+          self.w = r.screenWidth || 212
+          self.h = r.screenHeight || 520
+          self.shape = r.screenShape || 'rect'
+          self.applyTier()
+          self.ready = true
+        },
+        fail: function () { self.applyTier() }
+      })
+    } catch (e) { this.applyTier() }
+  },
+
+  /** 屏宽分档：阈值与 base.css 里媒体查询保持一致 */
+  applyTier() {
+    const w = this.w
+    this.tier = w >= 300 ? 'l' : (w >= 200 ? 'm' : 's')
+    this.tierName = w + '×' + this.h + ' · ' + (this.shape === 'circle' ? '圆屏' : '胶囊屏')
+    this.fsTitle = this.tier === 'l' ? 20 : (this.tier === 's' ? 16 : 17)
+    this.fsNav = this.tier === 'l' ? 18 : (this.tier === 's' ? 15 : 16)
+    this.setPad(this.padMode, true)
+  },
+
+  tap() {
+    if (!this.vib) return
+    try { vibrator.vibrate({ mode: 'short' }) } catch (e) {}
+  },
+
+  setVib(v) { this.vib = !!v; saveKey('tb_vib', v ? '1' : '0', null) },
+
+  setPad(i, silent) {
+    const p = this.PAD_PRESETS[i] || this.PAD_PRESETS[0]
+    this.padMode = i
+    this.padName = p.name
+    // 336 那档屏更高更宽，不需要额外留白；窄屏按档位缩放
+    const k = this.tier === 'l' ? 0.6 : (this.tier === 's' ? 0.8 : 1)
+    this.padTop = Math.round(p.top * k)
+    this.padBottom = Math.round(p.bottom * k)
+    this.padSide = Math.round(p.side * k)
+    if (!silent) saveKey('tb_pad', String(i), null)
+  },
+
+  /** 字节数转可读：1536 → 1.5 KB */
+  fmtBytes(n) {
+    const v = Number(n)
+    if (!isFinite(v) || v < 0) return '—'
+    if (v < 1024) return v + ' B'
+    if (v < 1048576) return (v / 1024).toFixed(1) + ' KB'
+    return (v / 1048576).toFixed(2) + ' MB'
+  },
+
+  /** 屏幕描述一行（首页顶部当状态用） */
+  screenLine() {
+    return this.w + '×' + this.h + ' · ' + (this.shape === 'circle' ? '圆屏' : '胶囊屏') + ' · ' + this.tier.toUpperCase()
+  }
+}
+</script>

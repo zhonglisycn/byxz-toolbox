@@ -1,0 +1,127 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">工具箱</text>
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">本机屏幕</text>
+          <text class="row-sub" style="font-size: 12px">{{screenLine}}</text>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">用后端干活（表盘位 Lua 后端）</text>
+      <div class="row" @click="go('term')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">终端</text>
+          <text class="row-sub" style="font-size: 12px">自己输命令，或点常用命令就跑</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('mon')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">监控</text>
+          <text class="row-sub" style="font-size: 12px">CPU 负载与内存，可开持续监控</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('files')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">文件</text>
+          <text class="row-sub" style="font-size: 12px">浏览目录、读文本文件</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('tools')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">更多工具</text>
+          <text class="row-sub" style="font-size: 12px">进程列表 / 算力跑分 / 截屏</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">动系统</text>
+      <div class="row" @click="go('avapps')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">应用管理</text>
+          <text class="row-sub" style="font-size: 12px">隐藏 / 恢复 / 删除已装应用</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('props')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">系统属性</text>
+          <text class="row-sub" style="font-size: 12px">看官方设置，改隐藏选项</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('log')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">后端日志</text>
+          <text class="row-sub" style="font-size: 12px">后端最近干了什么</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">本应用</text>
+      <div class="row" @click="go('backend')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">后端诊断</text>
+          <text class="row-sub" style="font-size: 12px">逐步检查两端有没有接上</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('settings')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">设置</text>
+          <text class="row-sub" style="font-size: 12px">振动、界面留白</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="go('about')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">关于</text>
+          <text class="row-sub" style="font-size: 12px">版本与致谢</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+
+export default {
+  private: {
+    padTop: 0,
+    padBottom: 0,
+    padSide: 0,
+    fsTitle: 17,
+    screenLine: ''
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop
+    this.padBottom = app.padBottom
+    this.padSide = app.padSide
+    this.fsTitle = app.fsTitle
+    this.screenLine = app.screenLine()
+  },
+
+  go(name) {
+    this.$app.$def.tap()
+    router.push({ uri: 'pages/' + name })
+  }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

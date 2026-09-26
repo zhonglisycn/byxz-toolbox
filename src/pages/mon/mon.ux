@@ -1,0 +1,99 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">监控</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="refresh">刷新</text>
+      </div>
+
+      <div class="card">
+        <text class="big" style="font-size: 26px">{{cpuText}}</text>
+        <text class="sub" style="font-size: 13px">负载 {{l1}} / {{l5}} / {{l15}}</text>
+      </div>
+      <div class="card">
+        <text class="big" style="font-size: 26px">{{memText}}</text>
+        <text class="sub" style="font-size: 13px">已用 {{usedMb}} MB / 共 {{totalMb}} MB</text>
+      </div>
+
+      <div class="row" @click="toggle">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">持续监控</text>
+          <text class="row-sub" style="font-size: 12px">{{running ? '开着，表盘上会浮一条' : '已停止'}}</text>
+        </div>
+        <div class="seg">
+          <div class="seg-btn" @click="toggle"><text class="t-seg t-icon">‹</text></div>
+          <text class="seg-val" style="font-size: 15px">{{running ? '开' : '关'}}</text>
+          <div class="seg-btn" @click="toggle"><text class="t-seg t-icon">›</text></div>
+        </div>
+      </div>
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    cpuText: 'CPU —', memText: 'MEM —',
+    l1: '-', l5: '-', l15: '-', usedMb: '-', totalMb: '-',
+    running: false, state: '点「刷新」读一次'
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.refresh()
+  },
+
+  refresh() {
+    this.$app.$def.tap()
+    const self = this
+    this.state = '读取中…'
+    bridge.cpuMonitor('status', function (e1, c) {
+      if (e1 || !c || c.status !== 'ok') { self.state = '✗ ' + (e1 || (c && c.message) || 'CPU 读不到'); return }
+      self.cpuText = c.text || 'CPU —'
+      self.l1 = c.load1; self.l5 = c.load5; self.l15 = c.load15
+      bridge.memoryMonitor('status', function (e2, m) {
+        if (e2 || !m || m.status !== 'ok') { self.state = '✗ ' + (e2 || '内存读不到'); return }
+        self.memText = m.text || 'MEM —'
+        self.totalMb = Math.round((m.totalKb || 0) / 1024)
+        self.usedMb = Math.round((m.usedKb || 0) / 1024)
+        self.state = '✓ 数据来自后端读 /proc'
+      })
+    })
+  },
+
+  toggle() {
+    this.$app.$def.tap()
+    const self = this
+    const next = !this.running
+    const act = next ? 'monitor_start' : 'monitor_stop'
+    bridge.cpuMonitor(act, function (e1, c) {
+      if (e1) { self.state = '✗ ' + e1; return }
+      bridge.memoryMonitor(act, function (e2, m) {
+        self.running = next
+        self.state = next ? '✓ 已开始（表盘上会浮一条，关掉就消失）' : '✓ 已停止'
+      })
+    })
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; }
+  .big { color: #ffffff; width: 100%; }
+  .sub { color: #a8a8a8; width: 100%; margin-top: 2px; }
+  .gap { width: 100%; height: 14px; }
+</style>

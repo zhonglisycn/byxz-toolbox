@@ -1,0 +1,116 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">系统属性</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="load">刷新</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+
+      <!-- 选中一条后给几个常用改法（开关类属性最多，所以给 0/1/空/反转） -->
+      <div class="card" if="{{sel}}">
+        <text class="big" style="font-size: 15px">{{sel}}</text>
+        <text class="sub" style="font-size: 12px">当前值：{{selVal === '' ? '(空)' : selVal}}</text>
+        <div class="acts">
+          <div class="seg">
+            <div class="seg-btn" @click="write('0')"><text class="t-seg" style="font-size: 14px">0</text></div>
+            <div class="seg-btn" @click="write('1')"><text class="t-seg" style="font-size: 14px">1</text></div>
+            <div class="seg-btn" @click="write('')"><text class="t-seg" style="font-size: 14px">空</text></div>
+            <div class="seg-btn" @click="flip"><text class="t-seg" style="font-size: 14px">反转</text></div>
+            <div class="seg-btn" @click="cancel"><text class="t-seg" style="font-size: 14px">取消</text></div>
+          </div>
+        </div>
+        <text class="sub" style="font-size: 11px">写完后端会再读一次对比，返回 changed 告诉你系统有没有真接受。</text>
+      </div>
+
+      <div class="row" for="{{items}}" tid="p" @click="pick($item)">
+        <div class="row-main">
+          <text class="row-sub" style="font-size: 12px">{{$item}}</text>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">说明：读的是 NSH 的 getprop（官方属性表）；写用 setprop。有些属性是只读的，写了不会生效——结果里会如实标出来。</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    state: '读取中…', items: [], sel: '', selVal: ''
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.load()
+  },
+
+  load() {
+    this.$app.$def.tap()
+    const self = this
+    this.state = '读取中…'
+    this.sel = ''
+    bridge.call('property', { action: 'props' }, function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '读不到'); return }
+      const list = res.items || []
+      self.items = list
+      self.state = list.length + ' 条属性（点一条改它）'
+    })
+  },
+
+  pick(line) {
+    if (!line) return
+    this.$app.$def.tap()
+    const i = String(line).indexOf('=')
+    if (i <= 0) { this.state = '这条不是 key=value，跳过'; return }
+    this.sel = String(line).slice(0, i)
+    this.selVal = String(line).slice(i + 1)
+  },
+
+  cancel() {
+    this.$app.$def.tap()
+    this.sel = ''
+    this.selVal = ''
+  },
+
+  flip() {
+    const v = this.selVal === '1' ? '0' : '1'
+    this.write(v)
+  },
+
+  write(v) {
+    this.$app.$def.tap()
+    const self = this
+    this.state = '写入 ' + this.sel + ' …'
+    bridge.call('property', { action: 'setprop', property: this.sel, value: v, confirm: true }, function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '写不进去'); return }
+      self.selVal = res.after === undefined ? v : res.after
+      self.state = (res.changed ? '✓ 已改：' : '✗ 系统没接受：') + self.sel + ' = ' + (res.after === '' ? '(空)' : res.after)
+    })
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; }
+  .big { color: #ffffff; width: 100%; }
+  .sub { color: #a8a8a8; width: 100%; margin-top: 2px; }
+  .acts { width: 100%; flex-direction: column; margin-top: 8px; }
+  .gap { width: 100%; height: 14px; }
+</style>

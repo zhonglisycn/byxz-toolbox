@@ -1,0 +1,106 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">文件</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="up">‹ 上级</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="home">起点</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{path}}</text>
+      <div class="row" for="{{items}}" tid="i" @click="tap($item)">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{$item.n}}</text>
+          <text class="row-sub" style="font-size: 12px">{{$item.d}}</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+      <div class="card" if="{{text}}">
+        <text class="out" style="font-size: 12px">{{text}}</text>
+      </div>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+const ROOTS = ['/', '/data', '/tmp', '/data/quickapp', '/proc']
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    path: '/', items: [], state: '正在列目录…', text: ''
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.list(this.path)
+  },
+
+  list(p) {
+    const self = this
+    this.$app.$def.tap()
+    this.path = p
+    this.text = ''
+    this.state = '正在列 ' + p + ' …'
+    bridge.listDir(p, function (err, res) {
+      if (err) { self.items = []; self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.items = []; self.state = '✗ ' + ((res && res.message) || '列不出来'); return }
+      const out = []
+      const names = res.items || []
+      for (let i = 0; i < names.length && i < 80; i++) {
+        out.push({ n: names[i], d: p === '/' ? '/' + names[i] : p + '/' + names[i] })
+      }
+      self.items = out
+      self.state = out.length + ' 项' + (names.length > 80 ? '（只列前 80）' : '')
+    })
+  },
+
+  tap(item) {
+    if (!item) return
+    const self = this
+    this.$app.$def.tap()
+    this.text = ''
+    bridge.readText(item.d, function (err, res) {
+      if (!err && res && res.status === 'ok' && res.text !== undefined) {
+        self.state = '✓ 读了 ' + item.n + '（' + (res.bytes || 0) + ' 字节，显示前 1200）'
+        self.text = String(res.text).slice(0, 1200)
+        return
+      }
+      // 读不成文本就当目录进去（后端对目录会返回文件内容失败）
+      self.list(item.d)
+    })
+  },
+
+  up() {
+    if (this.path === '/' || this.path === '') return
+    const p = this.path.replace(/\/+$/, '')
+    const i = p.lastIndexOf('/')
+    this.list(i <= 0 ? '/' : p.slice(0, i))
+  },
+
+  home() {
+    // 轮换起点，省得手输路径
+    const i = ROOTS.indexOf(this.path)
+    this.list(ROOTS[(i + 1) % ROOTS.length])
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .out { color: #d6d6d6; width: 100%; }
+  .gap { width: 100%; height: 14px; }
+</style>

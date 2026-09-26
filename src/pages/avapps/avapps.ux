@@ -1,0 +1,137 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">应用管理</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="load">刷新</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+
+      <!-- 选中某个应用后才出现动作（避免误触） -->
+      <div class="card" if="{{sel}}">
+        <text class="big" style="font-size: 16px">{{selName}}</text>
+        <text class="sub" style="font-size: 12px">{{sel}}</text>
+        <div class="acts">
+          <div class="pill" @click="hide">
+            <text class="t-pill" style="font-size: 15px">{{selHidden ? '恢复显示' : '隐藏'}}</text>
+          </div>
+          <div class="pill pill-danger" @click="del">
+            <text class="t-pill" style="font-size: 15px">删除</text>
+          </div>
+          <div class="pill pill-quiet" @click="cancel">
+            <text class="t-pill" style="font-size: 15px">取消</text>
+          </div>
+        </div>
+        <text class="sub" style="font-size: 11px">改动前会自动备份 apps.json 为 .bak；若应用列表刷不出来，用它还原即可。</text>
+      </div>
+
+      <div class="row" for="{{items}}" tid="a" @click="pick($item)">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{$item.name}}</text>
+          <text class="row-sub" style="font-size: 12px">{{$item.pkg}}</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">说明：隐藏/删除改的是系统 apps.json（原版也是这个机制）。删除只从列表移除并删目录，出问题可从 .bak 还原。</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    state: '读取中…', items: [], sel: '', selName: '', selHidden: false
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.load()
+  },
+
+  load() {
+    this.$app.$def.tap()
+    const self = this
+    this.state = '读取中…'
+    bridge.appList(function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '读不到'); return }
+      const out = []
+      const src = res.items || []
+      for (let i = 0; i < src.length && i < 60; i++) {
+        out.push({
+          pkg: src[i].pkg || '?',
+          name: src[i].name || '(无名字)',
+          hidden: src[i].visible === false
+        })
+      }
+      self.items = out
+      self.state = out.length + ' 个应用 · 来源 ' + (res.source || '?')
+    })
+  },
+
+  pick(item) {
+    if (!item) return
+    this.$app.$def.tap()
+    this.sel = item.pkg
+    this.selName = item.name
+    this.selHidden = !!item.hidden
+  },
+
+  cancel() {
+    this.$app.$def.tap()
+    this.sel = ''
+    this.selName = ''
+  },
+
+  hide() {
+    this.$app.$def.tap()
+    const self = this
+    this.state = '正在改应用列表…'
+    bridge.call('app_manager', { action: 'set_visible', package: this.sel, confirm: true }, function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '失败了'); return }
+      self.state = '✓ ' + (res.message || '已改')
+      self.sel = ''
+      self.load()
+    })
+  },
+
+  del() {
+    this.$app.$def.tap()
+    const self = this
+    this.state = '正在删除…'
+    bridge.call('app_manager', { action: 'delete', package: this.sel, confirm: true }, function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '删除失败'); return }
+      self.state = '✓ ' + (res.message || '已删除')
+      self.sel = ''
+      self.load()
+    })
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; }
+  .big { color: #ffffff; width: 100%; }
+  .sub { color: #a8a8a8; width: 100%; margin-top: 2px; }
+  .acts { width: 100%; flex-direction: column; margin-top: 8px; }
+  .pill { margin-bottom: 6px; }
+  .pill-danger { background-color: #D93A2F; }
+  .gap { width: 100%; height: 14px; }
+</style>

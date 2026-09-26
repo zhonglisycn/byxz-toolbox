@@ -1,0 +1,118 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">振动</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">点一下试振</text>
+      <div class="row" @click="test('short')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">短振</text>
+          <text class="row-sub" style="font-size: 12px">按键反馈用的那种</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="test('long')">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">长振</text>
+          <text class="row-sub" style="font-size: 12px">提醒用的那种</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="row" @click="triple">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">连振三下</text>
+          <text class="row-sub" style="font-size: 12px">看间隔是否均匀</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">本应用</text>
+      <div class="row" @click="toggle">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">按键振动</text>
+          <text class="row-sub" style="font-size: 12px">{{vib ? '已开启' : '已关闭'}}</text>
+        </div>
+        <div class="seg">
+          <div class="seg-btn" @click="toggle"><text class="t-seg t-icon">‹</text></div>
+          <text class="seg-val" style="font-size: 15px">{{vib ? '开' : '关'}}</text>
+          <div class="seg-btn" @click="toggle"><text class="t-seg t-icon">›</text></div>
+        </div>
+      </div>
+      <text class="sec" style="font-size: 12px">状态：{{state}}</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+
+export default {
+  private: {
+    padTop: 0,
+    padBottom: 0,
+    padSide: 0,
+    fsTitle: 17,
+    vib: true,
+    state: '点上面几行试一下',
+    count: 0
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop
+    this.padBottom = app.padBottom
+    this.padSide = app.padSide
+    this.fsTitle = app.fsTitle
+    this.vib = app.vib
+  },
+
+  test(mode) {
+    this.$app.$def.tap()
+    this.state = '发送了 ' + (mode === 'short' ? '短振' : '长振')
+    try {
+      vibrator.vibrate({
+        mode: mode,
+        success: function () {},
+        fail: function () { self.state = '这台设备不支持 ' + mode }
+      })
+    } catch (e) { this.state = '振动接口不可用' }
+  },
+
+  /** 连振三下：用定时器串起来，顺便看间隔是否稳定 */
+  triple() {
+    this.$app.$def.tap()
+    const self = this
+    this.count = 3
+    this.state = '连振 3 下…'
+    let i = 0
+    const once = function () {
+      if (i >= 3) { self.state = '连振结束（3 下）'; return }
+      i++
+      try { vibrator.vibrate({ mode: 'short' }) } catch (e) {}
+      setTimeout(once, 260)
+    }
+    once()
+  },
+
+  toggle() {
+    const app = this.$app.$def
+    app.tap()
+    app.setVib(!app.vib)
+    this.vib = app.vib
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

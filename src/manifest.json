@@ -1,0 +1,78 @@
+{
+  "package": "com.byxz.toolbox",
+  "name": "工具箱",
+  "versionName": "1.1.2",
+  "versionCode": 112,
+  "minPlatformVersion": 1000,
+  "icon": "/common/icon/logo.png",
+  "deviceTypeList": [
+    "watch"
+  ],
+  "description": "手环工具箱（自研后端）：终端/文件/监控/应用/属性/日志 · byxz",
+  "features": [
+    {
+      "name": "system.router"
+    },
+    {
+      "name": "system.storage"
+    },
+    {
+      "name": "system.vibrator"
+    },
+    {
+      "name": "system.device"
+    },
+    {
+      "name": "system.file"
+    },
+    {
+      "name": "system.brightness"
+    },
+    {
+      "name": "system.prompt"
+    }
+  ],
+  "config": {
+    "logLevel": "log",
+    "designWidth": "device-width"
+  },
+  "router": {
+    "entry": "pages/home",
+    "pages": {
+      "pages/home": {
+        "component": "home"
+      },
+      "pages/settings": {
+        "component": "settings"
+      },
+      "pages/about": {
+        "component": "about"
+      },
+      "pages/backend": {
+        "component": "backend"
+      },
+      "pages/term": {
+        "component": "term"
+      },
+      "pages/mon": {
+        "component": "mon"
+      },
+      "pages/files": {
+        "component": "files"
+      },
+      "pages/tools": {
+        "component": "tools"
+      },
+      "pages/avapps": {
+        "component": "avapps"
+      },
+      "pages/props": {
+        "component": "props"
+      },
+      "pages/log": {
+        "component": "log"
+      }
+    }
+  },
+  "minAPILevel": 1
+}

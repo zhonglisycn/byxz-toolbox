@@ -1,0 +1,142 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">屏幕亮度</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="read">读取</text>
+      </div>
+
+      <div class="display">
+        <text class="t-display" style="font-size: 24px">{{value}}</text>
+        <text class="t-echo" style="font-size: 12px">{{state}}</text>
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">亮度</text>
+          <text class="row-sub" style="font-size: 12px">步进 10，按一下就生效</text>
+        </div>
+        <div class="seg">
+          <div class="seg-btn" @click="step(-10)"><text class="t-seg t-icon">‹</text></div>
+          <text class="seg-val" style="font-size: 15px">{{value}}</text>
+          <div class="seg-btn" @click="step(10)"><text class="t-seg t-icon">›</text></div>
+        </div>
+      </div>
+
+      <div class="row" @click="toggleKeep">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">屏幕常亮</text>
+          <text class="row-sub" style="font-size: 12px">{{keep ? '已开启，不会自动熄屏' : '已关闭'}}</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">{{note}}</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import brightness from '@system.brightness'
+
+export default {
+  private: {
+    padTop: 0,
+    padBottom: 0,
+    padSide: 0,
+    fsTitle: 17,
+    fsNav: 16,
+    value: 50,
+    keep: false,
+    state: '正在读取…',
+    note: '不同系统版本开放的亮度接口不一样；读不到只说明接口不可用，不影响其它功能。'
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop
+    this.padBottom = app.padBottom
+    this.padSide = app.padSide
+    this.fsTitle = app.fsTitle
+    this.fsNav = app.fsNav
+    this.read()
+  },
+
+  /** 不同固件的方法名不一样，逐个试（拿到哪个用哪个） */
+  read() {
+    const self = this
+    const names = ['getBrightness', 'getValue']
+    for (let i = 0; i < names.length; i++) {
+      const fn = brightness[names[i]]
+      if (typeof fn !== 'function') continue
+      try {
+        fn.call(brightness, {
+          success: function (r) {
+            const v = r && (r.value !== undefined ? r.value : r.brightness)
+            if (v !== undefined && v !== null && isFinite(Number(v))) {
+              self.value = Math.round(Number(v))
+              self.state = '当前亮度 ' + self.value
+            } else self.state = '接口没有返回值'
+          },
+          fail: function () { self.state = '读取被系统拒绝' }
+        })
+        return
+      } catch (e) { /* 试下一个 */ }
+    }
+    this.state = '当前系统没有亮度接口'
+    this.note = '这台设备的系统没有开放亮度读写，本页只能当说明看。'
+  },
+
+  write(v) {
+    const self = this
+    const names = ['setBrightness', 'setValue']
+    for (let i = 0; i < names.length; i++) {
+      const fn = brightness[names[i]]
+      if (typeof fn !== 'function') continue
+      try {
+        fn.call(brightness, {
+          value: v,
+          success: function () { self.state = '已设为 ' + v },
+          fail: function () { self.state = '设置被系统拒绝' }
+        })
+        return
+      } catch (e) { /* 试下一个 */ }
+    }
+    this.state = '没有可用的设置接口'
+  },
+
+  step(d) {
+    this.$app.$def.tap()
+    let v = this.value + d
+    if (v < 1) v = 1
+    if (v > 100) v = 100
+    this.value = v
+    this.write(v)
+  },
+
+  toggleKeep() {
+    this.$app.$def.tap()
+    const self = this
+    this.keep = !this.keep
+    try {
+      brightness.setKeepScreenOn({
+        keepScreenOn: this.keep,
+        success: function () {},
+        fail: function () { self.state = '常亮接口不可用' }
+      })
+    } catch (e) { this.state = '常亮接口不可用' }
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

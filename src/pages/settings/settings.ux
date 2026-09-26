@@ -1,0 +1,114 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">设置</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">交互</text>
+      <div class="row">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">按键振动</text>
+          <text class="row-sub" style="font-size: 12px">{{vib ? '按下时轻振一下' : '已关闭'}}</text>
+        </div>
+        <div class="seg">
+          <div class="seg-btn" @click="flipVib"><text class="t-seg t-icon">‹</text></div>
+          <text class="seg-val" style="font-size: 15px">{{vib ? '开' : '关'}}</text>
+          <div class="seg-btn" @click="flipVib"><text class="t-seg t-icon">›</text></div>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">界面留白</text>
+      <div class="row">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 16px">{{padName}}</text>
+          <text class="row-sub" style="font-size: 12px">{{padHint}}</text>
+        </div>
+        <div class="seg">
+          <div class="seg-btn" @click="flipPad(-1)"><text class="t-seg t-icon">‹</text></div>
+          <text class="seg-val" style="font-size: 15px">{{padIdx}}</text>
+          <div class="seg-btn" @click="flipPad(1)"><text class="t-seg t-icon">›</text></div>
+        </div>
+      </div>
+      <text class="sec" style="font-size: 12px">{{padDetail}}</text>
+
+      <div class="pill pill-quiet" @click="reset">
+        <text class="t-pill" style="font-size: 16px">恢复默认设置</text>
+      </div>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import { dropKey } from '../../common/core/util'
+
+export default {
+  private: {
+    padTop: 0,
+    padBottom: 0,
+    padSide: 0,
+    fsTitle: 17,
+    vib: true,
+    padName: '全屏',
+    padIdx: 1,
+    padHint: '',
+    padDetail: '',
+    padTotal: 3
+  },
+
+  onShow() { this.sync() },
+
+  sync() {
+    const app = this.$app.$def
+    this.padTop = app.padTop
+    this.padBottom = app.padBottom
+    this.padSide = app.padSide
+    this.fsTitle = app.fsTitle
+    this.vib = app.vib
+    this.padName = app.padName
+    this.padIdx = app.padMode + 1
+    this.padTotal = app.PAD_PRESETS.length
+    this.padHint = app.padMode === 0 ? '铺满整屏，内容仍可上下滑动' : '上下左右都留出空间'
+    this.padDetail = '当前留白：上 ' + app.padTop + ' · 下 ' + app.padBottom + ' · 侧 ' + app.padSide + ' px（屏宽 ' + app.w + '）'
+  },
+
+  flipVib() {
+    const app = this.$app.$def
+    app.tap()
+    app.setVib(!app.vib)
+    this.vib = app.vib
+  },
+
+  flipPad(d) {
+    const app = this.$app.$def
+    app.tap()
+    let i = app.padMode + d
+    if (i < 0) i = app.PAD_PRESETS.length - 1
+    if (i >= app.PAD_PRESETS.length) i = 0
+    app.setPad(i, false)
+    this.sync()
+  },
+
+  reset() {
+    const app = this.$app.$def
+    app.tap()
+    dropKey('tb_vib', null)
+    dropKey('tb_pad', null)
+    app.setVib(true)
+    app.setPad(0, false)
+    this.sync()
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

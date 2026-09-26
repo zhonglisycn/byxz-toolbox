@@ -1,0 +1,166 @@
+<import name="input-method" src="../../components/InputMethod/InputMethod.ux"></import>
+
+<template>
+  <div class="page" style="padding: 0px">
+    <scroll class="scroll" scroll-y="true" bounces="true" style="padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">终端</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="run(cmd)">执行</text>
+      </div>
+
+      <!-- 命令输入：点一下弹键盘，再点收起。键盘是开源组件 NEORUAA/Vela_input_method(MIT)，
+           它的「en」模式就是纯英文 QWERTY，终端要的数字/符号/大小写都在里面。 -->
+      <div class="inputbar {{kbOn ? 'inputbar-on' : ''}}" @click="toggleKb">
+        <text class="ib-text" style="font-size: 15px">{{cmd ? cmd : '点这里输命令'}}</text>
+        <text class="ib-hint" style="font-size: 11px">{{kbOn ? '收起' : '输入'}}</text>
+      </div>
+      <text class="sec" style="font-size: 12px">{{hint}}</text>
+      <!-- 现场读数：键盘不弹时靠它区分「点没生效」「组件没渲染」「按键事件没回来」 -->
+      <text class="sec" style="font-size: 12px">{{kbOn ? '键盘已挂载' : '键盘未挂载'}} · 按键 {{keyCount}} · 可见事件 {{visCount}}</text>
+
+      <div class="card" if="{{out}}">
+        <text class="out" style="font-size: 12px">{{out}}</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">常用命令（点一下就跑）</text>
+      <div class="row" for="{{cmds}}" tid="c" @click="run($item.c)">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{$item.c}}</text>
+          <text class="row-sub" style="font-size: 12px">{{$item.d}}</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="gap"></div>
+    </scroll>
+
+    <!-- 键盘（NEORUAA/Vela_input_method，MIT）：pill 分支已改成 212 基准，与手环 10 屏宽一致。
+         按需挂载而不是切 hide：组件作者在源码里标注 hide watcher 在部分设备不可靠，
+         所以只在需要时把组件建出来，并直接传 hide={{false}} 让它一建出来就是展开的。
+         注意 hide 必须写 {{false}}，字符串 "false" 是 truthy，会被当成隐藏。 -->
+    <input-method if="{{kbOn}}"
+      hide="{{false}}"
+      keyboardtype="QWERTY"
+      maxlength="60"
+      vibratemode="short"
+      screentype="pill-shaped"
+      @visibility-change="onKbVisible"
+      @key-down="onKbKey"
+      @delete="onKbDelete"
+      @complete="onKbComplete"
+    ></input-method>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    kbOn: false,
+    keyCount: 0,
+    visCount: 0,
+    cmd: '',
+    hint: '键盘只有英文；输完点右上角「执行」',
+    out: '',
+    cmds: [
+      { c: 'uname -a', d: '内核与机型' },
+      { c: 'free', d: '内存（NuttX 分池）' },
+      { c: 'ps', d: '进程列表' },
+      { c: 'uptime', d: '开机时长' },
+      { c: 'ls /proc', d: 'procfs 里有什么' },
+      { c: 'cat /proc/cpuload', d: 'CPU 负载' },
+      { c: 'df', d: '磁盘占用' },
+      { c: 'getprop', d: '系统属性' }
+    ]
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+  },
+
+  // 键盘每敲一下发一次 complete（英文模式下一次一个字符），所以这里是「追加」；
+  // 覆盖会让 cmd 永远只剩最后一个字符，等于打不进字。
+  onKbComplete(event) {
+    const t = event && event.detail && event.detail.content ? event.detail.content : ''
+    if (!t) return
+    this.cmd = (this.cmd + String(t)).slice(0, 60)
+    this.hint = '已输入：' + this.cmd
+  },
+
+  // 组件的键盘按下/显隐事件（README 里事件名是 kebab-case，模板里写 visibility-change）
+  onKbKey() { this.keyCount = this.keyCount + 1 },
+
+  onKbVisible(evt) {
+    this.visCount = this.visCount + 1
+    const v = evt && evt.detail ? evt.detail.visible : null
+    this.hint = v === null ? this.hint : (v ? '键盘已展开' : '键盘已收起')
+  },
+
+  // 组件自己的缓冲区空了才发 delete，所以退格由页面删自己的 cmd
+  onKbDelete() {
+    this.cmd = this.cmd.slice(0, -1)
+    this.hint = this.cmd ? '已输入：' + this.cmd : '键盘只有英文；输完点右上角「执行」'
+  },
+
+  toggleKb() {
+    this.$app.$def.tap()
+    this.kbOn = !this.kbOn
+    this.hint = this.kbOn ? '键盘只有英文；输完点右上角「执行」' : '点输入框可以再叫出键盘'
+  },
+
+  run(cmd) {
+    if (!cmd) { this.hint = '先输点东西，或点下面的常用命令'; return }
+    const app = this.$app.$def
+    app.tap()
+    this.cmd = cmd
+    this.hint = '正在跑：' + cmd
+    this.out = ''
+    const self = this
+    bridge.runCmd(cmd, function (err, res) {
+      if (err) { self.hint = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') {
+        self.hint = '✗ ' + ((res && res.message) || '后端没返回')
+        return
+      }
+      self.hint = '✓ ' + cmd + (res.truncated ? '（输出已截断）' : '')
+      self.out = String(res.stdout || '(没有输出)').slice(0, 1500)
+    })
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+
+  /* 命令输入框：点一下弹键盘、再点收起 */
+  .inputbar {
+    width: 100%;
+    height: 42px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 12px;
+    padding-right: 12px;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+    background-color: #1c1c1e;
+    border-radius: 14px;
+  }
+  .inputbar-on { background-color: #2a2a2c; }
+  .ib-text { color: #ffffff; flex: 1; }
+  .ib-hint { color: #8e8e93; }
+
+  .kbwrap { width: 100%; flex-direction: column; flex-shrink: 0; }
+
+  .card { width: 100%; flex-direction: column; flex-shrink: 0; background-color: #262626; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .out { color: #d6d6d6; width: 100%; }
+  .gap { width: 100%; height: 14px; }
+</style>

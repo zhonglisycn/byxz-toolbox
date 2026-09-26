@@ -1,0 +1,25 @@
+# ---------- 依赖与构建产物 ----------
+node_modules/
+node_modules-luacheck/
+dist/
+build/
+release/
+.temp_*/
+.temp_shellpp/
+*.log
+
+# ---------- 工具产生的临时目录 ----------
+.ct-*/
+tools/preview/.work/
+tools/preview/out/
+
+# ---------- 不随仓库分发的第三方原始文件 ----------
+# 原版后端 Lua（原作者未开源）与米环管理 3.0 参考片段
+backend/backend.lua
+backend/ref-mihuan3.lua
+backend/ref-mihuan3/
+attic/backend-port-搁置/
+
+# ---------- 文档里的位图与第三方预览图 ----------
+docs/*.png
+tools/preview/prew-upstream.png

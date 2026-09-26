@@ -1,0 +1,111 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">后端诊断</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="run">重跑</text>
+      </div>
+
+      <div class="display">
+        <text class="t-display" style="font-size: 20px">{{okCount}}/{{steps.length}}</text>
+        <text class="t-echo" style="font-size: 12px">通过的检查项</text>
+      </div>
+
+      <div class="row" for="{{steps}}" tid="s">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{$item.mark}} {{$item.k}}</text>
+          <text class="row-sub" style="font-size: 12px">{{$item.v}}</text>
+        </div>
+      </div>
+
+      <div class="row" if="{{payload}}">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 14px">后端回复内容</text>
+          <text class="row-sub" style="font-size: 12px">{{payload}}</text>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">说明：后端是装在表盘位的 Lua 应用（原版 resource.bin），不需要改动。本页逐步检查：能不能写自己的目录 → 能不能留下 device_info.json 让后端认出我们 → 能不能读到后端写的 ipc_guard.json 令牌 → 能不能真的把一条命令发给它并拿到结果。</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+export default {
+  private: {
+    padTop: 0,
+    padBottom: 0,
+    padSide: 0,
+    fsTitle: 17,
+    fsNav: 16,
+    okCount: 0,
+    payload: '',
+    steps: []
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop
+    this.padBottom = app.padBottom
+    this.padSide = app.padSide
+    this.fsTitle = app.fsTitle
+    this.fsNav = app.fsNav
+    this.run()
+  },
+
+  run() {
+    this.$app.$def.tap()
+    this.steps = []
+    this.payload = ''
+    this.okCount = 0
+    const self = this
+    const mark = function (k, v, ok) {
+      self.steps = self.steps.concat([{ k: k, v: v, mark: ok ? '✓' : '✗' }])
+      if (ok) self.okCount = self.okCount + 1
+    }
+
+    // 1) 设备信息
+    const app = this.$app.$def
+    const info = app.info
+    mark('设备信息', info ? ('读到了（' + (info.model || '?') + ' / ' + app.w + '×' + app.h + '）') : '读不到，仍可继续', true)
+
+    // 2) 目录写测试
+    bridge.findDir(function (ok2) {
+      mark('找到可写的私有目录', ok2 ? bridge.dir() : '三个候选目录都写不进（沙箱限制或目录不存在）', ok2)
+      if (!ok2) return
+
+      // 3) 写 device_info.json（后端靠它认出我们）
+      bridge.announce(function (err) {
+        mark('写 device_info.json', err ? err : '已写入（后端靠这个文件定位目录）', !err)
+
+        // 4) 读后端写的安全令牌
+        bridge.refreshGuard(function (eg) {
+          mark('读 ipc_guard.json', eg ? eg : '已读到安全令牌（说明后端在跑）', !eg)
+
+          // 5) 真发一条命令试试
+          bridge.call('cmd', { action: 'run', cmd: 'uname -a' }, function (e3, res) {
+            if (e3) { mark('向后端发命令', e3, false); return }
+            mark('向后端发命令', '后端回复 status=' + (res && res.status ? res.status : '?'), !!(res && res.status === 'ok'))
+            const txt = res && (res.output || res.stdout || res.message)
+            self.payload = txt ? String(txt).slice(0, 400) : JSON.stringify(res || {}).slice(0, 400)
+          })
+        })
+      })
+    })
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

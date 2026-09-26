@@ -1,0 +1,65 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">已装应用</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="load">刷新</text>
+      </div>
+      <text class="sec" style="font-size: 12px">{{state}}</text>
+      <div class="row" for="{{items}}" tid="a">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{$item.name}}</text>
+          <text class="row-sub" style="font-size: 12px">{{$item.pkg}}</text>
+        </div>
+      </div>
+      <text class="sec" style="font-size: 12px">说明：只读列表。隐藏/删除应用需要改系统文件，本后端不做（那是变砖高发区）。</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+export default {
+  private: {
+    padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
+    state: '读取中…', items: []
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop; this.padBottom = app.padBottom; this.padSide = app.padSide
+    this.fsTitle = app.fsTitle; this.fsNav = app.fsNav
+    this.load()
+  },
+
+  load() {
+    this.$app.$def.tap()
+    const self = this
+    this.state = '读取中…'
+    bridge.appList(function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '读不到'); return }
+      const out = []
+      const src = res.items || []
+      for (let i = 0; i < src.length && i < 60; i++) {
+        out.push({ pkg: src[i].pkg || '?', name: src[i].name || (src[i].visible === false ? '(已隐藏)' : '') })
+      }
+      self.items = out
+      self.state = out.length + ' 个应用（来源 ' + (res.source || '?') + '）'
+    })
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

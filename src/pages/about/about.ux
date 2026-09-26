@@ -1,0 +1,115 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">关于</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+      </div>
+
+      <div class="row">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 17px">工具箱 {{version}}</text>
+          <text class="row-sub" style="font-size: 12px">手环 10 端 · 屏幕 {{screenLine}}</text>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">本批次已完成</text>
+      <div class="row" for="{{done}}" tid="d">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{$item.k}}</text>
+          <text class="row-sub" style="font-size: 12px">{{$item.v}}</text>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">后续批次待做</text>
+      <div class="row" for="{{todo}}" tid="t">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{$item.k}}</text>
+          <text class="row-sub" style="font-size: 12px">{{$item.v}}</text>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">后端</text>
+      <div class="row">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 15px">{{beText}}</text>
+          <text class="row-sub" style="font-size: 12px">{{beSub}}</text>
+        </div>
+      </div>
+
+      <text class="sec" style="font-size: 12px">来源与许可</text>
+      <div class="row">
+        <div class="row-main">
+          <text class="row-sub" style="font-size: 12px">界面端按协议重写；表盘位 Lua 后端基于原作者（Shell++ / com.shell.liangyi）的实现改写，并在本工程中按手环 10 适配——在此致谢原作者。本工程代码 MIT，作者 模糊二维码byxz。</text>
+        </div>
+      </div>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import bridge from '../../common/core/bridge'
+
+export default {
+  private: {
+    padTop: 0,
+    padBottom: 0,
+    padSide: 0,
+    fsTitle: 17,
+    version: 'v0.1.0',
+    beText: '检测中…',
+    beSub: '表盘位 Lua 后端（终端/文件/监控等要靠它）',
+    screenLine: '',
+    done: [
+      { k: '设备信息', v: '型号、系统、屏幕、代号（读系统接口）' },
+      { k: '屏幕亮度', v: '读写亮度、屏幕常亮（接口不支持时如实提示）' },
+      { k: '振动', v: '短振/长振/连振测试，按键反馈开关' },
+      { k: '缓存与清理', v: '本应用存档查看与清空' },
+      { k: '设置', v: '振动、界面留白（三档，全屏 / 留边 / 保守）' },
+      { k: '多机型适配层', v: '按屏宽分档（192 / 212 / 336），页面不再写死尺寸' }
+    ],
+    todo: [
+      { k: '第 2 批 · 文件', v: '文件浏览、只读查看、书签与历史' },
+      { k: '第 3 批 · 文本与应用', v: '文本编辑、应用管理、缓存清理（系统级）' },
+      { k: '第 4 批 · 截图', v: '截图、预览、同步到手机、HTTP 直传' },
+      { k: '第 5 批 · 网络与日志', v: '网络传输、测速、日志与日志历史' },
+      { k: '第 6 批 · 性能与调试', v: '内存/CPU 监控、JS/Lua/MCU 算力、调试菜单（危险项只读）' }
+    ]
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop
+    this.padBottom = app.padBottom
+    this.padSide = app.padSide
+    this.fsTitle = app.fsTitle
+    this.screenLine = app.screenLine()
+    this.checkBackend()
+  },
+
+  /** 后端（表盘位的 Lua 应用）在不在：不在线时后面的终端/文件/监控页只能用应用自己的接口 */
+  checkBackend() {
+    const self = this
+    bridge.status(function (r) {
+      if (r.online) {
+        self.beText = '后端在线'
+        self.beSub = '目录 ' + r.dir
+      } else {
+        self.beText = '后端未就绪'
+        self.beSub = r.why + '（需把 Lua 后端装到表盘位）'
+      }
+    })
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

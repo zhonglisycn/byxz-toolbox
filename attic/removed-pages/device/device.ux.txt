@@ -1,0 +1,99 @@
+<template>
+  <div class="page" style="padding-top: {{padTop}}px; padding-bottom: {{padBottom}}px; padding-left: {{padSide}}px; padding-right: {{padSide}}px">
+    <scroll class="scroll" scroll-y="true" bounces="true">
+      <div class="toptitle">
+        <text class="t-title" style="font-size: {{fsTitle}}px">设备信息</text>
+      </div>
+      <div class="topnav">
+        <text class="t-nav t-icon" @click="back">‹ 返回</text>
+        <text class="t-nav" style="font-size: {{fsNav}}px" @click="reload">刷新</text>
+      </div>
+
+      <text class="sec" style="font-size: 12px">已读到 {{rows.length}} 项</text>
+      <div class="row" for="{{rows}}" tid="r">
+        <div class="row-main">
+          <text class="row-sub" style="font-size: 12px">{{$item.k}}</text>
+          <text class="row-title" style="font-size: 16px; width: 100%">{{$item.v}}</text>
+        </div>
+      </div>
+      <text class="sec" style="font-size: 12px">{{note}}</text>
+      <div class="gap"></div>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import device from '@system.device'
+
+// 常见的字段先按中文标签排，剩下的按原样列在后面（不同系统版本字段不一样，
+// 与其漏掉不如列全，也别写死）
+const LABELS = {
+  brand: '品牌', manufacturer: '厂商', model: '型号', product: '产品', deviceType: '设备类型',
+  osType: '系统类型', osVersionName: '系统版本', osVersionCode: '系统版本号',
+  platformVersionName: '平台版本', platformVersionCode: '平台版本号',
+  screenWidth: '屏幕宽度', screenHeight: '屏幕高度', screenShape: '屏幕形状', screenDensity: '像素密度',
+  language: '语言', region: '地区', apiVersion: 'API 版本', host: '宿主'
+}
+
+export default {
+  private: {
+    padTop: 0,
+    padBottom: 0,
+    padSide: 0,
+    fsTitle: 17,
+    fsNav: 16,
+    rows: [],
+    note: ''
+  },
+
+  onShow() {
+    const app = this.$app.$def
+    this.padTop = app.padTop
+    this.padBottom = app.padBottom
+    this.padSide = app.padSide
+    this.fsTitle = app.fsTitle
+    this.fsNav = app.fsNav
+    if (app.info) this.fill(app.info)
+    else this.reload()
+  },
+
+  reload() {
+    const self = this
+    try {
+      device.getInfo({
+        success: function (r) { self.$app.$def.info = r; self.fill(r) },
+        fail: function () { self.rows = []; self.note = '读不到设备信息（系统接口不可用）' }
+      })
+    } catch (e) {
+      this.rows = []
+      this.note = '设备接口在当前系统版本上不可用'
+    }
+  },
+
+  fill(r) {
+    const out = []
+    const used = {}
+    for (const k in LABELS) {
+      if (r[k] === undefined || r[k] === '') continue
+      out.push({ k: LABELS[k], v: String(r[k]) })
+      used[k] = 1
+    }
+    for (const k in r) {
+      if (used[k] || k === 'screenShape') continue
+      const v = r[k]
+      if (v === '' || v === null || v === undefined || typeof v === 'object') continue
+      out.push({ k: k, v: String(v) })
+    }
+    this.rows = out
+    this.note = out.length ? '共 ' + out.length + ' 项，来自系统接口 device.getInfo' : '没有可用字段'
+  },
+
+  back() { this.$app.$def.tap(); router.back() }
+}
+</script>
+
+<style>
+  @import '../../common/style/base.css';
+  .gap { width: 100%; height: 14px; }
+</style>

@@ -1,0 +1,247 @@
+/* 数学助手 · 公共样式
+   画布 212×520 的胶囊屏：上下各是半径 106px 的半圆。因为内容可以上下滑动，
+   半圆不是禁区——滚过去的元素自然能看清，所以按全屏渲染：顶部 30px、底部 32px，
+   左右仍留 18px（那两条边是直的）。
+   配色沿用参考项目 Open_Modular_Boardgame_Companion 的风格：
+   纯黑底 + #333 圆钮 + 数字白 / 运算符橙 / 等号绿 / 常量紫 / 函数蓝。
+   注意：Vela 的 <text> 不继承父级颜色，颜色必须写在文字自己身上。 */
+
+.page {
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  padding-left: 18px;
+  padding-right: 18px;
+  padding-top: 30px;
+  padding-bottom: 32px;
+}
+
+/* ---------- 顶栏 ---------- */
+/* 顶栏按胶囊形状分两行：
+   ① 最上面 y≈0~34 处圆只有约 90~120px 宽，只放得下居中的标题；
+   ② 返回/右侧按钮放第二行（y≈34~66，可用宽度已 ≥150px），左右各内缩 46px。
+   这样 0 边距全屏时三件东西都在圆内、互不重叠。 */
+.toptitle {
+  width: 100%;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.topnav {
+  width: 100%;
+  height: 32px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+.header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.t-title { font-size: 17px; color: #ffffff; font-weight: bold; text-align: center; }
+.t-back { font-size: 14px; color: #7aa7ff; width: 52px; height: 34px; text-align: center; }
+.t-sub { font-size: 11px; color: #8b8f96; }
+.t-info { font-size: 11px; color: #8b8f96; }
+.t-warn { color: #ff8a65; }
+.t-ok { color: #54cc58; }
+
+/* ---------- 按钮 ---------- */
+.btn {
+  height: 44px;
+  border-radius: 22px;
+  background-color: #333333;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-primary { background-color: #2f7d33; }
+.btn-ghost { background-color: #222222; }
+.t-btn { font-size: 15px; color: #ffffff; text-align: center; width: 100%; }
+
+/* ---------- 键盘：4 列 × 41px + 3px 间距 = 173px，装得进 176px ---------- */
+.pad {
+  width: 100%;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
+}
+
+.key {
+  width: 41px;
+  height: 41px;
+  margin: 1px;
+  border-radius: 13px;
+  background-color: #333333;
+  align-items: center;
+  justify-content: center;
+}
+
+.key-wide { width: 85px; }
+.key-tall { height: 85px; }
+.key-dim { background-color: #242424; }
+.key-on { background-color: #2f7d33; }
+
+/* 键盘字号三档：各页统一走这里（原来 calc 13/15/19、plot 15/16/20、eq 13/19 各写一套） */
+.t-key { font-size: 19px; text-align: center; width: 100%; color: #ffffff; }     /* 单字符：数字、运算符、x、括号 */
+.t-key-md { font-size: 16px; text-align: center; width: 100%; color: #ffffff; }  /* 双字符：10^、x²、πe 等 */
+.t-key-sm { font-size: 14px; text-align: center; width: 100%; color: #ffffff; }  /* 长标签：sin、asin、log、√ */
+/* 图标统一字号：所有纯符号按钮（‹ › ◀ ▶ ←）都用它，别各页 16/17/19 混着来 */
+.t-icon { font-size: 17px; text-align: center; }
+.k-num { color: #ffffff; }
+.k-op { color: #f7b336; }
+.k-eq { color: #54cc58; }
+.k-const { color: #e34afe; }
+.k-fn { color: #32a3ff; }
+.k-del { color: #ff6b6b; }
+
+/* ---------- 显示区 ---------- */
+.display {
+  width: 100%;
+  height: 46px;
+  flex-shrink: 0;
+  background-color: #111111;
+  border-radius: 22px;
+  align-items: center;
+  padding-left: 12px;
+  padding-right: 12px;
+  margin-bottom: 6px;
+}
+
+.t-display { font-size: 21px; color: #ffffff; text-align: right; width: 100%; }
+.t-echo { font-size: 12px; color: #8b8f96; text-align: right; width: 100%; }
+
+/* ---------- 列表项（首页 / 设置） ---------- */
+.item {
+  width: 100%;
+  height: 56px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding-left: 14px;
+  padding-right: 14px;
+  margin-bottom: 9px;
+  border-radius: 14px;
+  background-color: #1c1c1c;
+  flex-shrink: 0;
+}
+
+.item-main { background-color: #2f7d33; }
+.t-item { font-size: 16px; color: #ffffff; width: 100%; }
+.t-item-sub { font-size: 11px; color: #8b8f96; width: 100%; margin-top: 2px; }
+.t-item-sub-on { color: #cfe8d0; }
+
+/* ---------- 结果区 ---------- */
+.result {
+  width: 100%;
+  background-color: #141414;
+  border-radius: 14px;
+  flex-direction: column;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.scroll { width: 100%; flex: 1; flex-direction: column; }
+
+/* ==================================================================
+   参考 UI 设计稿（NPlus Novaxis 小米手环 10 UI 参考）补充的组件
+   设计语言：深黑底 + 行式列表（标题 + 副标题 + 右侧值/箭头）+ 功能项开关
+   + 底部胶囊主按钮 + 蓝色强调。整行一个大触点，不再堆一屏小按钮。
+   ================================================================== */
+
+/* ---------- 行式列表 ---------- */
+.list { width: 100%; flex-direction: column; }
+
+.row {
+  width: 100%;
+  min-height: 54px;
+  flex-direction: row;
+  align-items: center;
+  padding: 9px 14px;
+  margin-bottom: 8px;
+  border-radius: 16px;
+  background-color: #1c1c1e;
+  flex-shrink: 0;
+}
+
+.row-main { flex: 1; flex-direction: column; }
+.row-title { color: #ffffff; }
+.row-sub { color: #8e8e93; margin-top: 2px; }
+.row-val { color: #8e8e93; }
+.row-go { color: #48484a; margin-left: 6px; }
+
+/* 选中 / 强调（设计稿里的蓝色条目） */
+.row-on { background-color: #2f6fed; }
+.row-on .row-title { color: #ffffff; }
+.row-on .row-sub { color: #d6e2ff; }
+
+/* ---------- 功能项开关：功能项 + ‹ 启用 › ---------- */
+.seg { flex-direction: row; align-items: center; }
+.seg-btn {
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background-color: #2a2a2c;
+}
+.seg-btn-on { background-color: #2f6fed; }
+.seg-val { min-width: 54px; text-align: center; color: #ffffff; }
+.t-seg { color: #ffffff; text-align: center; width: 100%; }
+.t-seg-off { color: #6b7078; text-align: center; width: 100%; }
+
+/* ---------- 底部胶囊主按钮 ---------- */
+.pill {
+  width: 100%;
+  height: 46px;
+  border-radius: 23px;
+  background-color: #2f6fed;
+  align-items: center;
+  justify-content: center;
+}
+.pill-quiet { background-color: #1c1c1e; }
+.t-pill { color: #ffffff; text-align: center; width: 100%; }
+
+/* ---------- 分区标题 ---------- */
+.sec { color: #8e8e93; margin-top: 10px; margin-bottom: 4px; }
+
+/* ---------- 顶栏的返回：‹ 返回（设计稿样式） ---------- */
+.t-nav { color: #2f6fed; }
+
+/* ==================================================================
+   多机型分档（192 手环9 / 212 手环10 / 336 10 Pro）
+   designWidth 用 device-width，所以这里按物理宽度分档。
+   字号档位在 app.ux 里算好（fsTitle / fsNav，页面用 {{fsTitle}}），
+   这里只管样式能覆盖的尺寸：行高、内边距、按钮。
+   ================================================================== */
+@media screen and (max-width: 199px) {
+  .row { min-height: 50px; padding: 8px 12px; margin-bottom: 7px; }
+  .seg-btn { width: 28px; height: 28px; }
+  .seg-val { min-width: 46px; }
+  .pill { height: 42px; border-radius: 21px; }
+  .display { height: 42px; }
+  .item { height: 52px; }
+  .sec { margin-top: 8px; margin-bottom: 3px; }
+}
+
+@media screen and (min-width: 300px) {
+  .row { min-height: 64px; padding: 11px 16px; margin-bottom: 10px; }
+  .seg-btn { width: 34px; height: 34px; }
+  .seg-val { min-width: 62px; }
+  .pill { height: 52px; border-radius: 26px; }
+  .display { height: 54px; }
+  .item { height: 62px; }
+  .sec { margin-top: 12px; margin-bottom: 6px; }
+}
