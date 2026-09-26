@@ -5,7 +5,8 @@
 
 ## 来源与致谢
 
-- 功能与原始实现来自 **Shell++（`com.shell.liangyi`）** 的开发者的表盘位 Lua 后端；
+- 功能与原始实现来自 **Shell++（`com.shell.liangyi`）** 作者 **IKUN_CXKPRO** 的表盘位 Lua 后端
+  （米坛主页：https://www.bandbbs.cn/members/323974/ ）；
   经许可参考其行为与协议，本目录的代码为独立重写。**致谢原作者。**
 - 配套的快应用（本仓库 `src/`）是按同一套协议重写的界面端。
 - 容器格式：`resource.bin` 是 Luavgl 容器（`0x1234A55A` 魔数 + 索引表 + 条目区），

@@ -2,7 +2,7 @@
 
 小米手环 10（Vela 快应用，212×520 胶囊屏）上的**工具箱**。功能蓝本取自手环工具类应用
 **Shell++（`com.shell.liangyi`）**，在**手环 10** 上重新实现——界面端与后端都是本项目的独立重写，
-原版未开源，**致谢原作者**。
+原版未开源，**致谢原作者 IKUN_CXKPRO**（米坛主页：https://www.bandbbs.cn/members/323974/ ）。
 
 - 产物：`dist/工具箱_byxz.bin`（约 205 KB）
 - 包名：`com.byxz.toolbox`，版本 1.1.2
@@ -63,8 +63,8 @@ bash tools/backend/test/run.sh   # 后端：fengari 语法体检 + 协议冒烟�
 
 ## 5. 致谢与许可
 
-- **Shell++（`com.shell.liangyi`）**：功能蓝本与后端协议来源。该项目未开源，本项目为**独立重写实现**，
-  经许可参考其行为并**致谢原作者**。
+- **Shell++（`com.shell.liangyi`）** by **IKUN_CXKPRO**（米坛主页：https://www.bandbbs.cn/members/323974/ ）：
+  功能蓝本与后端协议来源。该项目未开源，本项目为**独立重写实现**，经许可参考其行为并致谢作者。
 - **[NEORUAA/Vela_input_method](https://github.com/NEORUAA/Vela_input_method)**（MIT）：`src/components/InputMethod/`
   输入法组件，保留其许可证与署名，本仓库只做几何与性能改动。
 - **米环管理 3.0**：隐藏/删除应用的机制（搬 `apps.json` 的 `InstalledApps` / `HiddenApps`）与

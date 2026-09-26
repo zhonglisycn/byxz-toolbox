@@ -42,7 +42,7 @@
       <text class="sec" style="font-size: 12px">来源与许可</text>
       <div class="row">
         <div class="row-main">
-          <text class="row-sub" style="font-size: 12px">界面端按协议重写；表盘位 Lua 后端基于原作者（Shell++ / com.shell.liangyi）的实现改写，并在本工程中按手环 10 适配——在此致谢原作者。本工程代码 MIT，作者 模糊二维码byxz。</text>
+          <text class="row-sub" style="font-size: 12px">界面端按协议重写；表盘位 Lua 后端照 Shell++ 的协议独立重写，并在本工程中按手环 10 适配。Shell++（com.shell.liangyi）作者 IKUN_CXKPRO（米坛），在此致谢。本工程代码 MIT，作者 模糊二维码byxz。</text>
         </div>
       </div>
       <div class="gap"></div>
