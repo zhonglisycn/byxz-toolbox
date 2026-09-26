@@ -95,6 +95,33 @@ export default {
             mark('向后端发命令', '后端回复 status=' + (res && res.status ? res.status : '?'), !!(res && res.status === 'ok'))
             const txt = res && (res.output || res.stdout || res.message)
             self.payload = txt ? String(txt).slice(0, 400) : JSON.stringify(res || {}).slice(0, 400)
+
+            // 6) 后端自检：版本 / lvgl.fs / 目录 / apps.json / 体积探针 / ps 头
+            bridge.call('system', { action: 'selfcheck' }, function (e4, sc) {
+              if (e4) { mark('后端自检', e4, false); return }
+              if (!sc || sc.status !== 'ok') {
+                mark('后端自检', (sc && sc.message) || '没返回', false)
+                mark('结论', '后端版本太旧（没有 selfcheck），请装最新的后端包装到表盘位', false)
+                return
+              }
+              mark('后端版本', String(sc.backend || '?'), true)
+              mark('lvgl.fs 可用', sc.lvglFs ? '可用（目录体积走它）' : '不可用（退回 shell ls，会慢）', !!sc.lvglFs)
+              const dirs = sc.dirs || []
+              const yes = dirs.filter(function (d) { return d.isDir }).map(function (d) { return d.path })
+              const no = dirs.filter(function (d) { return !d.isDir }).map(function (d) { return d.path })
+              mark('存在的目录', (yes.join(' ') || '一个都没有'), yes.length > 0)
+              mark('缺的目录', no.join(' ') || '（无）', true)
+              mark('应用清单', (sc.appsJson || '没找到') + ' · ' + (sc.appCount || 0) + ' 条', !!sc.appsJson)
+              mark('清单字段名', (sc.entryKeys || []).join(' '), (sc.entryKeys || []).length > 0)
+              const pb = sc.sizeProbe || {}
+              const okProbe = !!(pb.dir && pb.files)
+              mark('体积探针', okProbe
+                ? (pb.dir + ' · ' + pb.files + ' 个文件 · ' + Math.round((pb.bytes || 0) / 1024) + ' KB · ' + (pb.ms || 0) + 'ms')
+                : ('没扫到目录（试过 /data/quickapp/app、/data/app 下的 ' + (pb.pkg || '?') + '）'), okProbe)
+              const ps = (sc.psHead || []).slice(0, 2).join(' | ')
+              mark('ps 头两行', ps || '(空)', !!ps)
+              mark('结论', okProbe ? '后端这条链是通的' : '后端在跑，但应用目录没找到——把上面“缺的目录”那行发给作者', true)
+            })
           })
         })
       })

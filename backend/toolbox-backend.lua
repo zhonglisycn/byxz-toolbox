@@ -18,7 +18,7 @@
 local SW = lvgl.HOR_RES()
 local SH = lvgl.VER_RES()
 
-local VERSION = 'byxz-toolbox-backend 0.2.0'
+local VERSION = 'byxz-toolbox-backend 0.4.8'
 local OUT_LIMIT = 32768
 local LOG_KEEP = 12                          -- 终端页保留最近几条
 
@@ -1023,6 +1023,80 @@ local function doSystem(req)
         local items = runLines('cat /proc/mounts')
         while #items > 60 do table.remove(items) end
         return { status = 'ok', items = items, count = #items }
+    end
+    if action == 'selfcheck' then
+        -- 自检：把"哪一层不对"直接列出来，界面上照抄即可判断
+        -- （路径常量来自米环管理 3.0：P65 及之前 /data/quickapp/app/，P67 /data/app/）
+        local out = {}
+        local dirs = { '/data/quickapp', '/data/quickapp/app', '/data/app', '/data/files', '/data' }
+        for i = 1, #dirs do
+            out[#out + 1] = { path = dirs[i], exists = exists(dirs[i]) and true or false,
+                              isDir = isDir(dirs[i]) and true or false }
+        end
+        local cands = { '/data/quickapp/apps.json', '/data/apps.json', '/data/files/quickapp/apps.json' }
+        local found, count, keys, firstPkg = '', 0, {}, ''
+        for i = 1, #cands do
+            local data = readJson(cands[i])
+            if type(data) == 'table' and type(data.InstalledApps) == 'table' then
+                found = cands[i]
+                count = #data.InstalledApps
+                local it = data.InstalledApps[1]
+                if type(it) == 'table' then
+                    for k, v in pairs(it) do
+                        if type(v) ~= 'table' then keys[#keys + 1] = tostring(k) end
+                    end
+                    firstPkg = tostring(it.package or it.pkg or it.name or '')
+                end
+                break
+            end
+        end
+        -- 体积探针：拿第一个应用真跑一次，带耗时（判断是"扫不到"还是"太慢"）
+        local probe = { pkg = firstPkg, dir = '', files = 0, bytes = 0, ms = 0 }
+        if firstPkg ~= '' then
+            local bases = { '/data/quickapp/app', '/data/app', '/data/quickapp', '/data/files/quickapp' }
+            for i = 1, #bases do
+                local dir = bases[i] .. '/' .. firstPkg
+                if isDir(dir) then
+                    local t0 = os.clock()
+                    local acc = { bytes = 0, n = 0 }
+                    local names = runShell('ls -1 "' .. dir .. '"')
+                    if names and names ~= '' then
+                        local list = splitLines(names)
+                        for j = 1, #list do
+                            local full = dir .. '/' .. list[j]
+                            if isDir(full) then
+                                local sub = runShell('ls -1 "' .. full .. '"')
+                                if sub and sub ~= '' then
+                                    local sl = splitLines(sub)
+                                    for m = 1, #sl do
+                                        local sz = fileSize(full .. '/' .. sl[m])
+                                        if sz > 0 then acc.bytes = acc.bytes + sz end
+                                        acc.n = acc.n + 1
+                                    end
+                                end
+                            else
+                                local sz = fileSize(full)
+                                if sz > 0 then acc.bytes = acc.bytes + sz end
+                                acc.n = acc.n + 1
+                            end
+                        end
+                    end
+                    probe.dir = dir
+                    probe.files = acc.n
+                    probe.bytes = acc.bytes
+                    probe.ms = math.floor((os.clock() - t0) * 1000)
+                    break
+                end
+            end
+        end
+        local psHead = {}
+        local ps = runLines('ps')
+        for i = 1, math.min(#ps, 4) do psHead[#psHead + 1] = ps[i] end
+        note('自检')
+        return { status = 'ok', backend = VERSION,
+                 lvglFs = (type(lvgl) == 'table' and type(lvgl.fs) == 'table') and true or false,
+                 dirs = out, appsJson = found, appCount = count, entryKeys = keys,
+                 sizeProbe = probe, psHead = psHead }
     end
     return { status = 'error', message = '不支持的 action：' .. action }
 end
