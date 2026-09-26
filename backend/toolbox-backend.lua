@@ -492,20 +492,65 @@ end
 local function doProcList(req)
     local limit = tonumber(req.limit) or 24
     -- 优先 ps：NuttX 的 /proc/<pid>/ 里没有 Linux 的 VmRSS，逐目录解析拿不到内存占用
+    -- NuttX 的 ps 是"一条任务多行"：头行 PID GROUP PRI POLICY TYPE NPX STATE EVENT SIGMASK，
+    -- 续行才是 STACK USED FILLED CPU ... COMMAND。它给的是**栈**用量，没有 Linux 的 RSS，
+    -- 所以按 Linux 表格去解析只会得到 0（真机实测就是这样）。
     local ps = runLines('ps')
     if #ps > 1 then
         local rows = {}
+        local cur = nil
         for i = 1, #ps do
-            local pid, name, mem = ps[i]:match('^%s*(%d+)%s+(%S+)%s+(%d+)')
-            if pid then rows[#rows + 1] = { pid = tonumber(pid), name = name, rssKb = tonumber(mem) or 0 } end
+            local line = ps[i]
+            local pid, pri, policy, ptype = line:match('^%s*(%d+)%s+(%d+)%s+(%d+)%s+(%S+)%s+(%S+)')
+            if pid then
+                cur = { pid = tonumber(pid), pri = tonumber(pri), policy = policy, ptype = ptype }
+                rows[#rows + 1] = cur
+            elseif cur then
+                -- 续行：找 STACK USED FILLED% ... CPU% COMMAND
+                local stack, used, filled = line:match('(%d+)%s+(%d+)%s+([%d%.]+)%%')
+                if stack then
+                    cur.stackBytes = tonumber(stack)
+                    cur.usedBytes = tonumber(used)
+                    cur.filled = tonumber(filled)
+                    local cpu = line:match('([%d%.]+)%.%s+[%d.]+%%%s+(%S+)')
+                    if cpu then cur.cpu = tonumber(cpu) end
+                    -- 命令名：最后一个 % 之后的第一段（可能带参数，取首段）
+                    local tail = line:match('%%%s+([^%%]+)$') or line
+                    local cmd = tail:match('^%s*([%w%._%-/]+)')
+                    if cmd then cur.name = cmd end
+                    -- 有的固件把 SIGMASK 放头行、续行直接是数字，这里兜一下
+                    if not cur.name then cur.name = line:match('([%w%._%-/]+)%s*$') or '?' end
+                else
+                    -- 续行但不是统计行（例如纯 sigmask），忽略
+                end
+            end
         end
         if #rows > 0 then
-            table.sort(rows, function(a, b) return a.rssKb > b.rssKb end)
+            for i = 1, #rows do
+                if rows[i].usedBytes == nil then rows[i].usedBytes = 0 end
+                if rows[i].stackBytes == nil then rows[i].stackBytes = 0 end
+                if rows[i].name == nil then rows[i].name = '?' end
+                rows[i].rssKb = math.floor(rows[i].usedBytes / 1024)
+            end
+            table.sort(rows, function(a, b) return a.usedBytes > b.usedBytes end)
             while #rows > limit do table.remove(rows) end
             note('进程列表(ps)')
-            return { status = 'ok', items = rows, count = #rows, source = 'ps' }
+            return { status = 'ok', items = rows, count = #rows, source = 'ps',
+                     note = 'NuttX 给的是栈用量（STACK/USED），不是内存 RSS' }
         end
     end
+    -- 结束进程：NSH 有 kill；优先级没有对应命令（NuttX 的 shell 不提供 renice），所以只能杀不能调
+    if req.action == 'kill' then
+        if req.confirm ~= true then
+            return { status = 'error', needConfirm = true, message = '结束进程要带 confirm=true' }
+        end
+        local pid = tonumber(req.pid)
+        if not pid or pid <= 0 then return { status = 'error', message = '缺少 pid' } end
+        local out = runShell('kill ' .. pid)
+        note('结束进程 ' .. pid)
+        return { status = 'ok', pid = pid, stdout = out, message = '已发送 kill；若该任务受系统监管会自动重启' }
+    end
+
     local pids = runLines('ls -1 /proc')
     local rows = {}
     for i = 1, #pids do
@@ -704,17 +749,41 @@ local function doAppManager(req)
     end
     if action == 'app_size' then
         if req.package == nil or req.package == '' then return { status = 'error', message = '缺少 package' } end
-        -- 安装目录不一定是 /data/quickapp：优先用前端带过来的 root（apps 动作会一并返回），再退回常见位置
-        local roots = { req.root, '/data/quickapp', '/data/files/quickapp', '/data/data/quickapp' }
-        local kb, used = 0, ''
-        for i = 1, #roots do
-            if type(roots[i]) == 'string' and roots[i] ~= '' then
-                local out = runShell('du -sk "' .. roots[i] .. '/' .. req.package .. '"')
-                local n = tonumber(out:match('(%d+)'))
-                if n and n > 0 then kb = n; used = roots[i]; break end
+        -- 不用 du：NuttX 的 NSH 未必带 du（真机实测算出来是 0）。改成在 Lua 里递归累加，
+        -- fileSize 只做 seek 不读内容，几百个文件也很快；上限 500 个文件防极端情况。
+        local function sizeOf(dir, depth, acc)
+            if depth > 6 or acc.n >= 500 then return end
+            local names = runShell('ls -1 "' .. dir .. '"')
+            if not names or names == '' then return end
+            local list = splitLines(names)
+            for i = 1, #list do
+                local nm = list[i]
+                if nm ~= '' and nm ~= '.' and nm ~= '..' then
+                    local full = dir .. '/' .. nm
+                    if isDir(full) then
+                        sizeOf(full, depth + 1, acc)
+                    else
+                        local sz = fileSize(full)
+                        if sz > 0 then acc.bytes = acc.bytes + sz end
+                        acc.n = acc.n + 1
+                    end
+                end
             end
         end
-        return { status = 'ok', package = req.package, kb = kb, root = used }
+        local bases = { req.root, '/data/quickapp', '/data/files/quickapp', '/data/data/quickapp' }
+        local bytes, used, files = 0, '', 0
+        for i = 1, #bases do
+            if type(bases[i]) == 'string' and bases[i] ~= '' then
+                local dir = bases[i] .. '/' .. req.package
+                if isDir(dir) then
+                    local acc = { bytes = 0, n = 0 }
+                    sizeOf(dir, 1, acc)
+                    if acc.n > 0 then bytes = acc.bytes; files = acc.n; used = dir; break end
+                end
+            end
+        end
+        return { status = 'ok', package = req.package, kb = math.floor(bytes / 1024), bytes = bytes,
+                 files = files, root = used }
     end
     if action == 'set_visible' or action == 'delete' then
         if req.confirm ~= true then

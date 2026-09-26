@@ -110,7 +110,7 @@ export default {
     if (i >= items.length || i >= TOP_N) { this.finish(items); return }
     bridge.call('app_manager', { action: 'app_size', package: items[i].package, root: this.root }, function (err, res) {
       if (!err && res && res.status === 'ok') {
-        const sz = Number(res.size || res.total || 0)
+        const sz = Number(res.size || res.total || res.bytes || ((res.kb || 0) * 1024) || 0)
         if (sz) items[i].size = sz
       }
       items[i].sizeText = items[i].size ? self.fmt(items[i].size) : '—'

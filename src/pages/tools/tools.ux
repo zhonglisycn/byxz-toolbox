@@ -32,6 +32,23 @@
 
       <text class="sec" style="font-size: 12px">{{state}}</text>
 
+      <div class="row" for="{{procRows}}" tid="p" @click="askKill($item)">
+        <div class="row-main">
+          <text class="row-title" style="font-size: 14px">{{$item.name}}　#{{$item.pid}}</text>
+          <text class="row-sub" style="font-size: 11px">{{$item.line}}</text>
+        </div>
+        <text class="row-go t-icon">›</text>
+      </div>
+      <div class="card" if="{{killTarget}}">
+        <text class="head" style="font-size: 12px">{{killHint}}</text>
+        <div class="pill" style="background-color: #ff453a" @click="doKill">
+          <text class="t-pill" style="font-size: 15px">再点一次：结束 {{killTarget.name}} #{{killTarget.pid}}</text>
+        </div>
+        <div class="pill pill-quiet" @click="cancelKill">
+          <text class="t-pill" style="font-size: 15px">取消</text>
+        </div>
+      </div>
+
       <div class="card" if="{{benchHist.length}}">
         <text class="head" style="font-size: 12px">历次跑分（越高越快，最新在右）</text>
         <div class="chart">
@@ -55,7 +72,8 @@ export default {
   private: {
     padTop: 0, padBottom: 0, padSide: 0, fsTitle: 17, fsNav: 16,
     state: '点上面三项试试', out: '',
-    benchHist: []
+    benchHist: [],
+    procRows: [], killTarget: null, killHint: ''
   },
 
   onShow() {
@@ -71,16 +89,54 @@ export default {
     const self = this
     this.state = '读进程列表…'
     this.out = ''
-    bridge.call('proc', { action: 'list', limit: 12 }, function (err, res) {
+    bridge.call('proc', { action: 'list', limit: 24 }, function (err, res) {
       if (err) { self.state = '✗ ' + err; return }
       if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '读不到'); return }
       const lines = []
       const items = res.items || []
+      const rows = []
       for (let i = 0; i < items.length; i++) {
-        lines.push(Math.round((items[i].rssKb || 0) / 1024) + 'MB  ' + items[i].name)
+        const it = items[i]
+        // NuttX 给的是栈用量，不是内存 RSS —— 老实按栈显示
+        const st = it.stackBytes ? (it.stackBytes + 'B') : '?'
+        const us = it.usedBytes ? (it.usedBytes + 'B') : '?'
+        const fl = (it.filled === undefined || it.filled === null) ? '?' : (it.filled + '%')
+        const cpu = (it.cpu === undefined || it.cpu === null) ? '' : (' · CPU ' + it.cpu + '%')
+        const line = '栈 ' + st + ' / 用 ' + us + '（' + fl + '）' + cpu
+        rows.push({ pid: it.pid, name: it.name || '?', line: line })
+        lines.push(line + '  ' + (it.name || '?') + ' #' + it.pid)
       }
+      self.procRows = rows
+      self.killTarget = null
       self.state = '✓ ' + items.length + ' 个进程（按内存）'
       self.out = lines.join('\n')
+    })
+  },
+
+  /* ---------- 进程：只能结束，改优先级做不到（NuttX 的 shell 没有对应命令） ---------- */
+  askKill(it) {
+    this.$app.$def.tap()
+    this.killTarget = it
+    this.killHint = '系统任务被结束可能导致手环重启（重启即恢复）。' + it.name + ' 的栈用量 ' + it.line
+  },
+
+  cancelKill() {
+    this.$app.$def.tap()
+    this.killTarget = null
+  },
+
+  doKill() {
+    const self = this
+    const app = this.$app.$def
+    app.tap()
+    if (!this.killTarget) return
+    const pid = this.killTarget.pid
+    bridge.call('proc', { action: 'kill', pid: pid, confirm: true }, function (err, res) {
+      if (err) { self.state = '✗ ' + err; return }
+      if (!res || res.status !== 'ok') { self.state = '✗ ' + ((res && res.message) || '结束不了'); return }
+      self.state = '✓ ' + ((res && res.message) || ('已发送 kill ' + pid))
+      self.killTarget = null
+      self.proc()          // 立刻刷一遍看还在不在
     })
   },
 
